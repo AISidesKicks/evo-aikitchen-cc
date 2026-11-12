@@ -1,0 +1,33 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# local secrets - never commit
+.env
+.env.*
+!.env.example
+
+# scratch artifacts, keep the directory itself
+scratch/*
+!scratch/.gitkeep
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# notebooks
+.ipynb_checkpoints/
+
+# logs and temporary files
+*.log
+*.tmp
+
+# os and editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
