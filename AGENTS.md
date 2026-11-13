@@ -53,6 +53,7 @@ The pixi Python env has a preinstalled set of tools - suggest expanding it, if n
 - `pixi run control` - gold must pass and null must fail, for every task
 - `python -m evo_bench run --provider fake --limit 3` - dry run with no credentials
 - `python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after`
+- `python -m evo_bench gate runs/a.jsonl runs/b.jsonl` - apply the promotion policy, exit 0 only on promote
 - `scripts/sandbox.sh REPO CMD...` - run a command with the repo read-only, a throwaway work dir and no network
 
 ## docs is the home of the GitHub static web page

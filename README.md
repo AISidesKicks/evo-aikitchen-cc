@@ -77,7 +77,13 @@ the workspace are masked.
 ```sh
 python -m evo_bench run --provider fake --limit 3
 python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
+python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
 ```
+
+The gate is the decision rule from the docs made executable. It refuses to promote on fewer
+than 20 paired tasks, demands a significant paired difference, caps the cost increase at 20
+percent, and rejects any regression on the holdout split. `--cache runs/cache.jsonl` stores
+model responses by request hash, so a campaign can be replayed without paying twice.
 
 `TMPDIR` points at `/tmp`, because pixi writes its own temp files before activation
 scripts run, so `TMPDIR` can never point at a directory pixi has to create. `EVO_TMP` is
@@ -100,8 +106,9 @@ committed. `.env.example` holds empty placeholders.
 - [x] Seven-task corpus with gold and null controls
 - [x] Sandboxed tool layer with path containment
 - [x] Paired comparison with an exact McNemar test
+- [x] Promotion gate with a fixed policy
+- [x] Response cache for cheap replay
 - [ ] Task corpus with 20 real tasks from commits and incidents
-- [ ] Promotion gate wired to the ledger
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
 

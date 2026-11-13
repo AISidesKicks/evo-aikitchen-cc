@@ -75,7 +75,14 @@ this repository or the repositories you actually ship.
 pixi run control                                  # gold must pass, null must fail
 python -m evo_bench run --provider fake --limit 3 # dry run, no credentials
 python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
+python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
 ```
+
+`gate` applies the promotion policy and exits 0 only on a promote. The default
+policy needs 20 paired tasks, a significant paired difference, no more than a 20
+percent rise in cost per success, and no regression on the holdout split
+(`"split": "holdout"` on a task). Lower `--min-tasks` when the corpus is smaller,
+and write down that you did.
 
 Nothing is worth measuring until `pixi run control` is green.
 
