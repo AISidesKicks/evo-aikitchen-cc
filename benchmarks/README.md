@@ -122,6 +122,21 @@ two variants at thirty turns gave 3/3 and 3/3, delta zero, exact McNemar p = 1.0
 with every run finishing rather than being capped. The gain was the budget, not
 the prompt.
 
+## Saturation
+
+Mining click produced 67 tasks that a 30-turn budget solves almost completely:
+the baseline passed every one of the first ten runs. A corpus the model already
+solves measures nothing about capability, because a variant cannot beat 100
+percent. Two honest responses, and this bench uses both:
+
+- run at a **tighter budget** (20 turns) so the tasks that need 26 turns have to
+  be done more efficiently, which is a real engineering question;
+- report **cost and turns per success** when pass rates saturate, because a
+  variant that reaches the same score in half the turns is a genuine improvement.
+
+The failure to avoid is quoting "no difference in pass rate" from a corpus where
+the pass rate was pinned at 100 percent.
+
 ## Deadlines and estimates
 
 `--deadline SECONDS` bounds a single run by wall clock. The budget cap stops a

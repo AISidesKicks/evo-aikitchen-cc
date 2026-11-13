@@ -556,6 +556,7 @@ def main(argv: list[str] | None = None) -> int:
 
     plan_cmd = sub.add_parser("plan", help="what this corpus can resolve")
     plan_cmd.add_argument("--tasks", type=Path, default=None, help="count tasks from this corpus")
+    plan_cmd.add_argument("--split", default=None, choices=["train", "holdout", "all"])
     plan_cmd.add_argument("--n", type=int, default=None, help="task count to use instead")
     plan_cmd.add_argument("--rate", type=float, default=0.8)
     plan_cmd.add_argument("--discordant", type=float, default=0.1)
@@ -640,7 +641,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "plan":
         count = args.n
         if count is None:
-            tasks = _load(root, args.tasks)
+            tasks = _load(root, args.tasks, args.split)
             count = len(tasks)
         result = resolution(count, rate=args.rate, discordant=args.discordant)
         print(plan_report(result))
