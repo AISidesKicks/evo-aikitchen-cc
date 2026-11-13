@@ -303,6 +303,7 @@ async def _cycle(
     trace_dir: Path | None = None,
     prices: Path | None = None,
     trials: int = 1,
+    limit: int | None = None,
 ) -> int:
     variants = load_variants(root / variants_dir)
     if baseline_name not in variants:
@@ -321,7 +322,7 @@ async def _cycle(
     book = load_prices(prices) if prices is not None else None
 
     result = await run_cycle(
-        tasks,
+        tasks[:limit] if limit else tasks,
         baseline=variants[baseline_name],
         candidates=[variants[name] for name in candidate_names],
         provider=provider,
@@ -428,6 +429,7 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--timeout", type=float, default=300.0)
     cycle_cmd.add_argument("--cache", type=Path, default=None)
     cycle_cmd.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
+    cycle_cmd.add_argument("--limit", type=int, default=None, help="use only the first N tasks")
     cycle_cmd.add_argument("--max-turns", type=int, default=None)
     cycle_cmd.add_argument("--trials", type=int, default=1)
     cycle_cmd.add_argument("--trace-dir", type=Path, default=None)
@@ -590,6 +592,7 @@ def main(argv: list[str] | None = None) -> int:
                     trace_dir=(root / args.trace_dir) if args.trace_dir else None,
                     prices=args.prices,
                     trials=args.trials,
+                    limit=args.limit,
                 )
             )
         except MissingCredentials as error:
