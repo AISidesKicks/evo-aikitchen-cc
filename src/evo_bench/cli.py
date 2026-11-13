@@ -25,6 +25,7 @@ from evo_bench.cycle import run_cycle, write_summary
 from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
 from evo_bench.providers import MissingCredentials, build as build_provider
+from evo_bench.report import write_report
 from evo_bench.runner import run_task
 from evo_bench.tasks import Task, class_counts, load_tasks
 from evo_bench.variants import Variant, load_variants
@@ -189,6 +190,20 @@ def _gate(
     return 0 if decision.promoted else 1
 
 
+def _report(
+    root: Path, ledger: Path, out: Path, *, title: str, baseline: str | None
+) -> int:
+    rows = list(read_ledger(root / ledger))
+    if not rows:
+        print(f"no rows in {ledger}")
+        return 1
+    path = write_report(
+        root / out, rows, title=title, baseline=baseline, source=str(ledger)
+    )
+    print(f"report {path} ({len(rows)} runs)")
+    return 0
+
+
 async def _cycle(
     root: Path,
     tasks: list[Task],
@@ -309,6 +324,12 @@ def main(argv: list[str] | None = None) -> int:
         "--max-cost-increase", type=float, default=DEFAULT_POLICY.max_cost_increase
     )
 
+    report_cmd = sub.add_parser("report", help="write a self-contained HTML report")
+    report_cmd.add_argument("--ledger", type=Path, default=Path(DEFAULT_LEDGER))
+    report_cmd.add_argument("--out", type=Path, default=Path("runs/report.html"))
+    report_cmd.add_argument("--title", default="EVO bench report")
+    report_cmd.add_argument("--baseline", default="baseline")
+
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
 
@@ -344,6 +365,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "compare":
         labels = tuple(part.strip() for part in args.labels.split(",", 1))
         return _compare(root, args.first, args.second, (labels[0], labels[-1]))
+    if args.command == "report":
+        return _report(
+            root,
+            args.ledger,
+            args.out,
+            title=args.title,
+            baseline=args.baseline or None,
+        )
     if args.command == "gate":
         labels = tuple(part.strip() for part in args.labels.split(",", 1))
         policy = Policy(
