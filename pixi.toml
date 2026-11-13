@@ -5,12 +5,44 @@ name = "evo1"
 platforms = ["linux-64"]
 version = "0.1.0"
 
-[tasks]
+[activation]
+# Creates the project temp directory on every activation. TMPDIR itself has to
+# point at a directory that already exists, because pixi writes its own temp
+# files before activation scripts run. See scripts/activate.sh.
+scripts = ["scripts/activate.sh"]
 
 [activation.env]
-TMPDIR = "/run/user/$UID/pixi_tmp/$PIXI_PROJECT_NAME"
+# /tmp always exists and is tmpfs on most Linux systems, so pixi can never be
+# blocked by a missing temp directory at startup.
+TMPDIR = "/tmp"
+# A private temp directory for bench runs, created by scripts/activate.sh.
+EVO_TMP = "/run/user/$UID/pixi_tmp/$PIXI_PROJECT_NAME"
 SCRATCH = "$PIXI_PROJECT_ROOT/scratch"
+
+[tasks.init]
+cmd = 'mkdir -p "$EVO_TMP" "$SCRATCH" "$PIXI_PROJECT_ROOT/runs"'
+description = "Create the private temp, scratch and runs directories"
+
+[tasks.default]
+depends-on = ["init"]
+cmd = 'echo "TMPDIR  $TMPDIR"; echo "EVO_TMP $EVO_TMP"; echo "SCRATCH $SCRATCH"; echo "runs    $PIXI_PROJECT_ROOT/runs"'
+description = "Prepare the workspace and print the local paths"
+
+[tasks.test]
+depends-on = ["init"]
+cmd = "pytest -q"
+description = "Run the bench test suite"
+
+[tasks.bench]
+depends-on = ["init"]
+cmd = "python -m evo_bench status"
+description = "Report the bench inventory and configuration"
 
 [dependencies]
 python = "3.12.*"
 huggingface_hub = ">=1"
+pytest = ">=9.2.0,<10"
+
+[pypi-dependencies]
+tau-ai = ">=0.4.11, <0.5"
+evo-bench = { path = ".", editable = true }

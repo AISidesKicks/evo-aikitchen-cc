@@ -11,11 +11,16 @@
 scratch/*
 !scratch/.gitkeep
 
+# bench ledger and run artifacts, keep the directory itself
+runs/*
+!runs/.gitkeep
+
 # python
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.pytest_cache/
 
 # notebooks
 .ipynb_checkpoints/
