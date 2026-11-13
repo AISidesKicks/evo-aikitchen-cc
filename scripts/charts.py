@@ -288,12 +288,112 @@ def resolution_chart() -> str:
     return "\n".join(parts)
 
 
+
+DIAGRAM_W = 940
+DIAGRAM_H = 360
+
+
+def _box(x: int, y: int, w: int, h: int, title: str, detail: str, *, fill: str = "#f9fafb") -> list[str]:
+    return [
+        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="8" fill="{fill}" '
+        f'stroke="{GRID}" stroke-width="1.5"/>',
+        f'<text x="{x + 12}" y="{y + 24}" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="13" font-weight="600" fill="{INK}">{escape(title)}</text>',
+        f'<text x="{x + 12}" y="{y + 42}" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="11" fill="{MUTED}">{escape(detail)}</text>',
+    ]
+
+
+def _arrow(x1: int, y1: int, x2: int, y2: int, *, label: str = "", dashed: bool = False) -> list[str]:
+    dash = ' stroke-dasharray="4 3"' if dashed else ""
+    parts = [
+        f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{MUTED}" '
+        f'stroke-width="1.5"{dash} marker-end="url(#head)"/>'
+    ]
+    if label:
+        parts.append(
+            f'<text x="{(x1 + x2) / 2:.0f}" y="{(y1 + y2) / 2 - 6:.0f}" text-anchor="middle" '
+            f'font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" '
+            f'fill="{MUTED}">{escape(label)}</text>'
+        )
+    return parts
+
+
+def bench_diagram() -> str:
+    """One page diagram of what runs, in which lane, in what order."""
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 372" '
+        f'width="100%" role="img" aria-label="Pipeline diagram: task, workspace, agent, '
+        f'grader, ledger, gate and report on the host, with tools and the acceptance '
+        f'check running inside a bubblewrap sandbox">',
+        '<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" '
+        f'markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{MUTED}"/></marker></defs>',
+        f'<rect width="940" height="372" fill="#ffffff"/>',
+        f'<text x="24" y="26" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="15" font-weight="600" fill="{INK}">How one task runs</text>',
+        f'<text x="24" y="50" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="11" font-weight="600" letter-spacing="0.06em" fill="{MUTED}">HOST</text>',
+    ]
+
+    boxes = (
+        (24, 140, "Task card", "fixture + acceptance"),
+        (176, 140, "Workspace", "throwaway copy"),
+        (328, 140, "Agent loop", "Tau, max turns"),
+        (480, 140, "Grader", "acceptance check"),
+        (632, 140, "Ledger", "tokens, cost, turns"),
+        (784, 132, "Gate and report", "paired and budgeted"),
+    )
+    for x, width, title, detail in boxes:
+        parts += _box(x, 96, width, 64, title, detail)
+
+    for (x1, w1, _t, _d), (x2, _w2, _t2, _d2) in zip(boxes, boxes[1:]):
+        parts += _arrow(x1 + w1, 128, x2 - 2, 128)
+
+    # The model provider sits outside the sandbox and outside the loop.
+    parts += _box(328, 20, 140, 50, "Model provider", "API, host only", fill="#eff6ff")
+    parts += _arrow(398, 70, 398, 94)
+    parts.append(
+        f'<text x="406" y="86" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="10" fill="{MUTED}">one call per turn</text>'
+    )
+
+    # Sandbox lane, aligned under the two stages that use it.
+    parts += [
+        f'<rect x="310" y="190" width="320" height="132" rx="10" fill="#fff7ed" '
+        f'stroke="{WARN}" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6 4"/>',
+        f'<text x="470" y="312" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="10" fill="{WARN}">bubblewrap: no network, no home, no keys</text>',
+    ]
+    parts += _box(328, 204, 140, 60, "Tools", "read, write, edit, bash", fill="#ffffff")
+    parts += _box(480, 204, 140, 60, "The tests", "only the failing ones", fill="#ffffff")
+
+    parts += _arrow(398, 161, 398, 202)
+    parts.append(
+        f'<text x="406" y="180" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="10" fill="{MUTED}">tool calls and results</text>'
+    )
+    parts += _arrow(550, 161, 550, 202, dashed=True)
+    parts.append(
+        f'<text x="558" y="180" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="10" fill="{MUTED}">runs it</text>'
+    )
+
+    parts.append(
+        f'<text x="24" y="362" font-family="ui-sans-serif, system-ui, sans-serif" '
+        f'font-size="11" fill="{MUTED}">The agent needs the model API, so it runs on the host. '
+        f'The tools do not, so they do not.</text>'
+    )
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     charts = {
         "campaigns.svg": campaign_chart(),
         "capped.svg": capped_chart(),
         "resolution.svg": resolution_chart(),
+        "pipeline.svg": bench_diagram(),
     }
     for name, svg in charts.items():
         (OUT / name).write_text(svg, encoding="utf-8")

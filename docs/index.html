@@ -55,16 +55,14 @@ nobody measured, for a bill nobody predicted.</p>
 A task is a step. An acceptance check is a meter. A token budget is a cost. And "done means value
 delivered" is the only rule that stops an agent declaring victory.</p>
 
-<h2>The bench, in one line</h2>
-<div class="pipeline">
-  <div><strong>Tasks</strong><span>mined from real commits, with a gold patch</span></div>
-  <div><strong>Sandbox</strong><span>tools run without network, home or keys</span></div>
-  <div><strong>Agent</strong><span>Tau, driven by its Python harness API</span></div>
-  <div><strong>Grader</strong><span>only the tests that must flip</span></div>
-  <div><strong>Ledger</strong><span>tokens, cost, turns, exit reason</span></div>
-  <div><strong>Gate</strong><span>paired statistics, cost cap, holdout</span></div>
-</div>
-<p class="muted">Every run produces a row. Every campaign produces a report. Nothing is scored by
+<h2>How it runs</h2>
+<figure>
+  <img src="assets/pipeline.svg" alt="Pipeline diagram: a task card and a workspace copy feed the agent loop on the host, which calls the model provider once per turn; tools and the tests run inside a bubblewrap sandbox with no network, no home directory and no keys; the grader writes a ledger row and the gate turns rows into a decision and a report">
+  <figcaption>One task, end to end: a fixture, a sandboxed attempt, a graded row, and a
+  decision that can refuse to decide.</figcaption>
+</figure>
+<p class="muted">Every run produces a row: tokens, cost, turns, tool calls, exit reason and score.
+Every campaign produces a gate decision and a self-contained HTML receipt. Nothing is scored by
 reading a transcript.</p>
 
 <h2>What we measured, and what it caught</h2>
