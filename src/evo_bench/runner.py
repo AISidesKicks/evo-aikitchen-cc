@@ -129,6 +129,7 @@ async def run_task(
         date=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         task_id=task.id,
         task_class=task.task_class,
+        split=task.split,
         harness=harness,
         harness_version=harness_version,
         model=model,

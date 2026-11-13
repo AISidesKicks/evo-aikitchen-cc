@@ -19,7 +19,9 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from evo_bench import __version__
+from evo_bench.cache import CachingProvider, ResponseCache
 from evo_bench.compare import compare, report
+from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.runner import run_task
@@ -28,6 +30,7 @@ from evo_bench.tasks import Task, class_counts, load_tasks
 DEFAULT_TASKS = "benchmarks/tasks.jsonl"
 EXAMPLE_TASKS = "benchmarks/tasks.example.jsonl"
 DEFAULT_LEDGER = "runs/ledger.jsonl"
+DEFAULT_POLICY = Policy()
 
 
 def _tau_version() -> str:
@@ -120,8 +123,11 @@ async def _run(
     ledger: Path,
     timeout: float,
     limit: int | None,
+    cache: Path | None = None,
 ) -> int:
     provider = build_provider(provider_name)
+    if cache is not None:
+        provider = CachingProvider(provider, ResponseCache(cache))
     selected = tasks[:limit] if limit else tasks
     passed = 0
     for task in selected:
@@ -152,6 +158,25 @@ def _compare(root: Path, first: Path, second: Path, labels: tuple[str, str]) -> 
     return 0
 
 
+def _gate(
+    root: Path,
+    baseline: Path,
+    candidate: Path,
+    *,
+    policy: Policy,
+    labels: tuple[str, str],
+    use_holdout: bool,
+) -> int:
+    decision = evaluate(
+        list(read_ledger(root / baseline)),
+        list(read_ledger(root / candidate)),
+        policy=policy,
+        use_holdout=use_holdout,
+    )
+    print(gate_report(decision, label_a=labels[0], label_b=labels[1]))
+    return 0 if decision.promoted else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="evo_bench", description=__doc__)
     parser.add_argument(
@@ -172,11 +197,31 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--ledger", type=Path, default=Path(DEFAULT_LEDGER))
     run.add_argument("--timeout", type=float, default=300.0)
     run.add_argument("--limit", type=int, default=None)
+    run.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        help="response cache file, so a campaign can be replayed without paying twice",
+    )
 
     compare_cmd = sub.add_parser("compare", help="paired comparison of two ledgers")
     compare_cmd.add_argument("first", type=Path)
     compare_cmd.add_argument("second", type=Path)
     compare_cmd.add_argument("--labels", default="A,B")
+
+    gate_cmd = sub.add_parser("gate", help="apply the promotion policy to two ledgers")
+    gate_cmd.add_argument("baseline", type=Path)
+    gate_cmd.add_argument("candidate", type=Path)
+    gate_cmd.add_argument("--labels", default="baseline,candidate")
+    gate_cmd.add_argument("--alpha", type=float, default=DEFAULT_POLICY.alpha)
+    gate_cmd.add_argument("--min-tasks", type=int, default=DEFAULT_POLICY.min_tasks)
+    gate_cmd.add_argument("--min-effect", type=float, default=DEFAULT_POLICY.min_effect)
+    gate_cmd.add_argument(
+        "--max-cost-increase", type=float, default=DEFAULT_POLICY.max_cost_increase
+    )
+    gate_cmd.add_argument(
+        "--no-holdout", action="store_true", help="ignore the holdout split"
+    )
 
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
@@ -196,6 +241,7 @@ def main(argv: list[str] | None = None) -> int:
                     ledger=args.ledger,
                     timeout=args.timeout,
                     limit=args.limit,
+                    cache=args.cache,
                 )
             )
         except MissingCredentials as error:
@@ -204,4 +250,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "compare":
         labels = tuple(part.strip() for part in args.labels.split(",", 1))
         return _compare(root, args.first, args.second, (labels[0], labels[-1]))
+    if args.command == "gate":
+        labels = tuple(part.strip() for part in args.labels.split(",", 1))
+        policy = Policy(
+            alpha=args.alpha,
+            min_tasks=args.min_tasks,
+            min_effect=args.min_effect,
+            max_cost_increase=args.max_cost_increase,
+        )
+        return _gate(
+            root,
+            args.baseline,
+            args.candidate,
+            policy=policy,
+            labels=(labels[0], labels[-1]),
+            use_holdout=not args.no_holdout,
+        )
     return 2

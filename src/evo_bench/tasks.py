@@ -34,6 +34,7 @@ class Task:
     budget_usd: float = 2.0
     difficulty: str = "medium"
     contamination: str = "unknown"
+    split: str = "train"
     partial: str | None = None
     notes: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
@@ -59,6 +60,7 @@ def _from_mapping(row: dict[str, Any]) -> Task:
         "budget",
         "difficulty",
         "contamination",
+        "split",
         "partial",
         "notes",
     }
@@ -78,6 +80,7 @@ def _from_mapping(row: dict[str, Any]) -> Task:
         budget_usd=float(budget.get("usd", 2.0)),
         difficulty=str(row.get("difficulty", "medium")),
         contamination=str(row.get("contamination", "unknown")),
+        split=str(row.get("split", "train")),
         partial=row.get("partial"),
         notes=row.get("notes"),
         extra={k: v for k, v in row.items() if k not in known},
