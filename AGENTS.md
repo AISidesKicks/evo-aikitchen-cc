@@ -28,7 +28,9 @@ Keep all info as very simple HTML pages.
 ## Secrets
 
 - `.env` is local only and gitignored. Never print, log, paste or commit its values.
+- `.env` holds a live OpenRouter key. Treat any leak as an incident: rotate the key first, then clean up.
 - `.env.example` holds empty placeholders only.
+- `pixi run secrets` checks that no secret-named value from `.env` appears in a tracked file or in history. `scripts/install-hooks.sh` runs the same check before every commit.
 - `scripts/load-env.sh` loads `.env` into the current shell without printing values. Source it, do not run it.
 - Provider keys are read by the host process that calls the model. The sandbox starts with `--clearenv`, so the agent's tools cannot see them.
 - `HF_TOKEN` is the read-only Hugging Face token. Load it into the process environment; never put it in URLs, dataset files or manifests.
@@ -58,6 +60,7 @@ The pixi Python env has a preinstalled set of tools - suggest expanding it, if n
 - `python -m evo_bench gate runs/a.jsonl runs/b.jsonl` - apply the promotion policy, exit 0 only on promote
 - `python -m evo_bench cycle --candidates strict,smallest-diff` - run basis and candidates, then gate each
 - `python -m evo_bench report --ledger runs/cycle.jsonl` - write a self-contained HTML receipt
+- `pixi run secrets` - check that no .env secret appears in tracked files or history
 - `scripts/sandbox.sh REPO CMD...` - run a command with the repo read-only, a throwaway work dir and no network
 
 ## docs is the home of the GitHub static web page

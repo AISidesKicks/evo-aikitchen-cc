@@ -115,6 +115,15 @@ OpenAI-compatible endpoint through `EVO_BASE_URL`. `EVO_MODEL` and `EVO_PROVIDER
 complete the pair. The model is called from the host process; the sandbox starts with
 `--clearenv`, so the agent's tools never see a key.
 
+```sh
+pixi run secrets                # no .env secret in a tracked file or in history
+scripts/install-hooks.sh        # the same check before every commit
+```
+
+The scanner reads `.env`, compares only secret-named values, and reports file names
+rather than values. If it ever finds a hit, rotate the key first: a commit that is pushed
+is public, and a rewritten history is a cleanup, not a fix.
+
 ## Status
 
 - [x] Landing page stub and custom domain
