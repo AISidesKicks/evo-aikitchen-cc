@@ -10,7 +10,10 @@ edit. Every credible result in this space freezes the evaluator before the searc
 Every failure in this space comes from a loop that found a way around the evaluator. That
 single asymmetry explains most of the design decisions in this page.
 
-Three 2026 papers make the topic concrete, and they attack three different parts of it:
+Six 2026 papers make the topic concrete. Three of them build a loop that works. Three of
+them measure whether the loop is worth having.
+
+The three methods:
 
 - **Recursive Harness Self-Improvement** (RHI, arXiv 2607.15524) shows that a harness
   written as a prompt can be revised in two or three iterations to beat the strongest
@@ -22,12 +25,26 @@ Three 2026 papers make the topic concrete, and they attack three different parts
   hardware: a locked task contract, sixteen invariants, a noise model, and a cross-cluster
   experience bank that survives the transfer.
 
+The three audits:
+
+- **The RSI Tax** (arXiv 2611.13524) prices the loop. On continual task streams, the token
+  cost of self-improvement exceeds the cost of executing the tasks for three of the four
+  published methods, and a 2,048-token note beats all of them on accuracy per token.
+- **TRUST** (arXiv 2611.10787) puts a statistical gate on the loop. A greedy accept rule
+  keeps bad updates 45.59 percent of the time; a sequential test with a declared error
+  budget cuts that to 2.78 percent and still ends with a higher score.
+- **Beneath the Surface** (arXiv 2611.07624) audits what the loop actually changed. All
+  sixteen evolved agents it studies gain tasks and lose tasks, and the highest scoring agent
+  never yields the largest further improvement.
+
 Alongside them sits the measurement base from
 [Beyond the Model](https://arxiv.org/html/2609.32459v1), which established that harness
 choice is worth roughly a model generation in points.
 
-This page is the synthesis. It covers what the three papers actually did, how to read them
+This page is the synthesis. It covers what the six papers actually did, how to read them
 through EVO, how to simulate the loop before you build it, and where the whole idea breaks.
+The order is deliberate: the methods first, because that is the exciting part, then the
+three audits, because that is the part that decides whether you should run any of it.
 
 Read [Building a custom AI harness with EVO principles](evo-in-ai-harness.md) first if you
 want the harness design itself. Read [Simulating the EVO process for harness development](evo-simulation.md)
@@ -41,6 +58,10 @@ optimizes the harness, not the harness that runs the task.
 - [RHI: recursion at the prompt level](#rhi-recursion-at-the-prompt-level)
 - [Branching search: recursion without collapse](#branching-search-recursion-without-collapse)
 - [InfraRSI: recursion under a locked contract](#infrarsi-recursion-under-a-locked-contract)
+- [The RSI tax: recursion that costs more than it delivers](#the-rsi-tax-recursion-that-costs-more-than-it-delivers)
+- [TRUST: recursion with a statistical gate](#trust-recursion-with-a-statistical-gate)
+- [Beneath the Surface: recursion that moves tasks around](#beneath-the-surface-recursion-that-moves-tasks-around)
+- [The rest of the 2026 wave](#the-rest-of-the-2026-wave)
 - [The same loop in three costumes](#the-same-loop-in-three-costumes)
 - [The EVO reading](#the-evo-reading)
 - [A reference RSI loop for a coding harness](#a-reference-rsi-loop-for-a-coding-harness)
@@ -107,15 +128,17 @@ This is also, quietly, the same rule as EVO's Must level. A Must is a constraint
 out the delivery regardless of the value delivered. A frozen evaluator is the harness
 equivalent: no amount of speed or task success compensates for a violated invariant.
 
-### Three ways it goes wrong
+### Five ways it goes wrong
 
 | Failure | What it looks like | First paper to name it |
 | --- | --- | --- |
 | Reward hacking | Tests weakened, work moved outside the timing window, precision lowered beyond the declared menu | InfraRSI |
 | Search collapse | Every proposal resembles the last one, the loop plateaus in one basin | Branching paper |
 | Cost blowup | Search costs more than the delivery it enables, so the "gain" is negative | RHI motivates it, citing Wang et al. 2026 |
+| Coverage churn | The average rises because new tasks are gained, while previously solved tasks quietly regress | Beneath the Surface |
+| Gate noise | The loop accepts an update that scored higher by luck, then builds the next revision on top of it | TRUST |
 
-Every design decision in the rest of this page exists to address one of those three.
+Every design decision in the rest of this page exists to address one of those five.
 
 ## The measurement base
 
@@ -596,6 +619,628 @@ and 50.00 percent, and a fixed 2.00 percent noise floor, all four arms converge 
 - **Single-team results.** Four workloads from one group, on hardware they control. Treat the
   numbers as an existence proof, not a benchmark you can expect to match.
 
+## The RSI tax: recursion that costs more than it delivers
+
+The three papers above report accuracy. None of them reports what the loop cost to run, in
+the same units as the task it was supposed to improve. This paper does, and it produces the
+least comfortable number of the year.
+
+The finding, in one line: **for three of the five adaptive methods, and for every method that
+revises the harness itself, the cost of improving the agent exceeded the cost of running it.**
+
+### The setup
+
+Six methods, two models, two benchmarks, four settings, 2,328 scored method-task pairs.
+
+| Method | What it updates | Update cadence |
+| --- | --- | --- |
+| Static | Nothing | Never |
+| ReasoningBank | A memory of extracted strategies | Per task, with retrieval |
+| Meta-Harness | Controller code | Every four tasks |
+| EvoSkill | Reusable skill folders | Every four tasks |
+| RRSI | Harness, with a regularizer against benchmark-specific edits | Every four tasks |
+| SRN | A single bounded note | Every four tasks, failures only |
+
+Two protocol details carry the whole design.
+
+**Each task is scored before its own feedback is used.** The outcome is recorded, then the
+update happens. That turns the experiment from a training run into a deployment simulation,
+which is the only version of the question that matters if you are paying the bill.
+
+**Re-execution is charged, and it does not replace the original outcome.** When a method
+re-runs a completed task to validate a candidate, those tokens go on the RSI bill, and the
+task keeps its first score. That single accounting rule is what makes the comparison honest,
+and it is the rule most published evaluations quietly skip.
+
+The streams are 105 repository positions from SWE-Chain-Evo (seven chains of fifteen, state
+reset between chains) and 89 Terminal-Bench 2.1 tasks in a fixed order. The models are
+DeepSeek V4.1 Flash and GPT-6 Luna.
+
+### The metric
+
+```
+N_task = tokens spent executing arriving tasks
+N_RSI  = tokens spent improving the agent, whether or not the update was adopted
+tax    = N_RSI / N_task
+```
+
+A tax of 100 percent means the loop costs as much as the work. The tax accounts for
+`tax / (1 + tax)` of total spend, so a 300 percent tax means three quarters of your budget
+went into improving the thing that does the work.
+
+The tax decomposes into three operations, and the split is where the design advice lives.
+
+| Operation | What it covers |
+| --- | --- |
+| Verify | Running the incumbent or a candidate on completed support tasks to inform selection: baselines, smoke tests, frontier re-evaluation |
+| Explore | Extra rollouts, proposal generation without edits, trajectory judging, embedding calls |
+| Write | Creating or revising persistent state: harness code, skills, notes, memories |
+
+The paper also labels each cost by whether the state or artifact it produced was **used in a
+later task** before the next reset. That label is descriptive, not causal, and the paper says
+so. It is still the most useful diagnostic in the paper, because it separates "expensive and
+load-bearing" from "expensive and forgotten".
+
+### The numbers
+
+Accuracy in percent, total tokens in millions, where total includes both task execution and
+the tax.
+
+| Method | DeepSeek, SWE | GPT-6 Luna, SWE | DeepSeek, terminal | GPT-6 Luna, terminal |
+| --- | --- | --- | --- | --- |
+| Static | 43.8 / 487.92 | 38.1 / 179.69 | 69.7 / 185.55 | 66.3 / 78.86 |
+| ReasoningBank | 40.0 / 520.64 | 37.1 / 191.21 | 69.7 / 198.87 | 67.4 / 85.46 |
+| Meta-Harness | 45.7 / 976.61 | 40.0 / 495.81 | 77.5 / 762.57 | 65.2 / 317.99 |
+| EvoSkill | 41.0 / 1,166.51 | 40.0 / 612.39 | 71.9 / 898.72 | 68.5 / 358.85 |
+| RRSI | 44.8 / 1,092.94 | 39.0 / 574.07 | 74.2 / 605.75 | 61.8 / 454.30 |
+| SRN | 48.6 / 492.56 | 41.0 / 157.07 | 78.7 / 214.65 | 68.5 / 87.08 |
+
+Read the last row twice. A note capped at 2,048 tokens, revised only from failed tasks every
+four tasks, with no extra sampling, no candidate validation and no retrieval search, has the
+highest observed accuracy in three of four settings and ties the best in the fourth. It also
+uses fewer total tokens than Meta-Harness, EvoSkill and RRSI in every setting.
+
+Relative to Static, SRN gains 4.7 points of mean accuracy for 3.6 percent more tokens. Relative
+to the three expensive methods it saves 65.6, 71.0 and 68.2 percent of mean total tokens,
+weighted equally across settings.
+
+### Where the money goes
+
+The tax rate is the number to remember.
+
+| Method | DeepSeek, SWE | GPT-6 Luna, SWE | DeepSeek, terminal | GPT-6 Luna, terminal |
+| --- | --- | --- | --- | --- |
+| ReasoningBank | 4.78 | 5.96 | 4.53 | 7.39 |
+| Meta-Harness | 109.06 | 177.35 | 314.16 | 329.15 |
+| EvoSkill | 144.35 | 213.21 | 393.10 | 358.57 |
+| RRSI | 125.79 | 213.02 | 223.23 | 346.68 |
+| SRN | 0.04 | 0.25 | 0.13 | 0.36 |
+
+Three of the five methods exceed 100 percent in all four settings. Meta-Harness and EvoSkill
+exceed 300 percent on the terminal stream. SRN never reaches one half of one percent.
+
+The decomposition says why. Verification, meaning re-running the agent on tasks it has
+already seen, is 74.8 percent of Meta-Harness's tax, 78.1 percent of EvoSkill's and 93.6
+percent of RRSI's. The search is not the expensive part. **Checking the search is.**
+
+The sharpest single example: on the DeepSeek terminal stream, EvoSkill spends 497.45 million
+tokens refreshing its existing skill frontier, against 182.26 million tokens serving the 89
+arriving tasks. Re-evaluating programs it already had cost more than doing the work, before
+any new rollout or new-skill validation. For comparison, EvoSkill spends 4.59 million tokens
+on actually materializing skills. The ratio between deciding and writing is over one hundred
+to one.
+
+Then there is the waste. The share of the tax attached to state or artifacts that were never
+used in a later task:
+
+| Method | Unused share of tax |
+| --- | --- |
+| Meta-Harness | 52.78 |
+| EvoSkill | 37.91 |
+| ReasoningBank | 63.57 |
+| RRSI | 23.70 |
+| SRN | 0.00 |
+
+Between a quarter and two thirds of a typical RSI budget pays for candidates that are then
+ignored. Meta-Harness's unused share is 564.85 million verification tokens, 217.60 million
+exploration tokens and 69.22 million writing tokens. ReasoningBank's is split almost evenly
+between judging and memory extraction, which is a different disease with the same symptom.
+
+### The reversal that makes the point
+
+On the DeepSeek terminal stream, Meta-Harness uses fewer task-execution tokens than SRN:
+184.13 million against 214.37 million. If you report execution cost, Meta-Harness looks
+cheaper.
+
+Add the tax and the comparison inverts. Meta-Harness carries a 578.45 million RSI tax for a
+total of 762.57 million. SRN totals 214.65 million. And Meta-Harness scores slightly lower:
+77.5 against 78.7 percent.
+
+That is the argument in one comparison. A method that is cheaper per task and more expensive
+per outcome, reported in a way that hides it.
+
+### What this changes in a design
+
+Five rules, all of them cheap to adopt.
+
+**Report tax, not just accuracy.** If a paper reports accuracy on a task stream without the
+update cost, you cannot tell whether the method pays. Assume it does not until shown
+otherwise.
+
+**Budget verification first.** Verification is three quarters of the tax in every measured
+method. Cache the baseline runs, subsample the support set, reuse the frontier scores you
+already have, and stop re-validating candidates that lost on the same evidence.
+
+**Bounded state is a feature.** SRN is not a strawman. It is a working hypothesis that most
+of the value of experience fits in a small, durable, human-readable summary of what went
+wrong. Before you build a harness search, check whether the note gets you most of the way.
+The paper's own framing is that it provides a counterexample to the need for a costly update
+procedure, not that it dominates on every axis.
+
+**Compare against more attempts, not against nothing.** The correct counterfactual for a
+search budget is spending the same tokens on more tries at the task. SRN versus Static is
+that comparison in miniature, and it is the reason the tax matters: the tax is spend that
+does not produce a task attempt.
+
+**Charge the unused.** The unused-artifact share is the cheapest available diagnostic. If
+half your updates are never read, your proposal distribution is wrong, your support set is
+stale, or your gate is admitting things nobody uses.
+
+### Where the tax paper is weak
+
+- **Two models, one task ordering.** The authors say this themselves. Ordering effects on a
+  terminal benchmark with no environmental drift are untested.
+- **Attribution is descriptive.** Use in a later task does not prove the tokens bought
+  accuracy, and absence of use does not prove the tokens were removable without changing
+  later updates. Controlled ablations are future work.
+- **No adaptive policy.** The paper compares fixed procedures and realized costs. It does not
+  evaluate a controller that forecasts the tax and chooses whether to update, which is the
+  obvious next experiment.
+- **Tokens, not dollars.** Input and output tokens are summed. A verification run and a
+  proposal run can differ in price per token by an order of magnitude.
+- **SRN is a baseline, not a method.** The experiment does not isolate which of its choices
+  (bounded note, failures only, four-task cadence) matters. It only shows the combination is
+  competitive.
+
+## TRUST: recursion with a statistical gate
+
+RHI has no gate: the last iteration wins. The branching paper has an implicit gate: selection
+on development data. InfraRSI has a gate made of boolean invariants, which is cheap and
+exact, and useless for the question "is this candidate actually better".
+
+None of them answers the question you face on the first day of a real loop. Given a few
+hundred validation tasks, a candidate that scored 2 points higher than the incumbent, and
+thirty revisions ahead of you, **how often will that gate accept a change that is actually
+worse?**
+
+TRUST answers it, with a guarantee.
+
+### Split the system before you test it
+
+The paper's framing is worth copying even if you ignore the statistics. Separate three things:
+
+| Part | Job | Tested how |
+| --- | --- | --- |
+| Solver | Runs the task under the current harness | Held-out score |
+| Proposer | Generates the candidate revision | Acceptance rate, novelty |
+| Gate | Decides whether the candidate replaces the incumbent | False evolution rate |
+
+The gate is where the safety property lives, and it is the only part that can be evaluated
+independently of the other two. That is why this paper can make a claim about a whole class
+of loops: the claim is about the gate, not about the harness.
+
+### False evolution rate
+
+Define the true population difference between candidate and incumbent as `delta`. Pick a
+tolerance `epsilon`. Then a revision falls into one of three regions.
+
+| Region | Meaning | Label |
+| --- | --- | --- |
+| `delta <= -epsilon` | Unacceptably worse | False evolution |
+| `-epsilon < delta <= 0` | Worse, but inside tolerance | Tolerated |
+| `delta > 0` | Genuinely better | True evolution |
+
+The false evolution rate is the expected proportion of accepted updates that land in the
+first region.
+
+```
+FER(T) = E[ (number of accepted updates with delta <= -epsilon) / max(1, number accepted) ]
+```
+
+Two things make this the right criterion rather than a convenience.
+
+**It is a proportion of accepts, not of proposals.** A gate that accepts almost nothing can
+have a low FER trivially. That is a real failure mode, and the paper demonstrates it (more
+below).
+
+**It has a tolerance.** Demanding proof that a candidate is at least as good is hopeless with
+limited samples, and the theory shows it: at `epsilon = 0`, the admissible betting fraction
+range collapses and the power result does not go through. A small declared tolerance is what
+buys statistical power. That is a design decision, not a fudge, and it should be written down
+before the first run.
+
+### The five mechanisms
+
+| Mechanism | What it does | Parameter |
+| --- | --- | --- |
+| Noninferiority | Tests against `-epsilon` instead of zero, so a small loss is allowed | `epsilon` |
+| E-value testing | Accumulates evidence as a nonnegative martingale, valid at any stopping time | betting fraction |
+| Overlap correction | Discounts evidence when validation samples have been seen before, weighted by exposure probability | `beta` |
+| Level allocation | Spends a fixed error budget `q` across rounds, e-LOND style inside e-GAI | `q` |
+| LLM allocator | Reads the candidate and prior feedback, adjusts the spending fraction within bounds | `rho_min`, `rho_max` |
+
+The overlap correction is the piece most practitioners get wrong without noticing. Rounds
+reuse the same validation pool, the proposer sees feedback from previous rounds, and the
+estimates become optimistic. That is adaptive data analysis, and it is the same problem the
+reusable holdout was invented for. TRUST models the correction as an allowance `beta`,
+weighted by the probability that a given draw was actually exposed before.
+
+The LLM allocator is the piece that sounds like a violation of the whole premise. It is not,
+and the reason is important: **the safety guarantee does not depend on the LLM being right.**
+The allocator can only move the spending fraction within a bounded range. A bad judgment
+makes the loop less efficient, not less safe. That is the correct way to add a model to a
+verification path, and it generalizes well beyond this paper.
+
+### The algorithm
+
+```
+B = q                                  # remaining error budget
+for each round t:
+    rho = clamp(LLM(context) * 1/(T-t+1), rho_min, rho_max)
+    alpha = allocate(B, rho, accepts_so_far)
+    for m = 1..n:                      # sequential test on validation draws
+        M = e_value(observations[1..m], beta)   # with overlap correction
+        if M >= 1/alpha: accept; break
+    else: keep the incumbent
+    B = charge(B, alpha)
+```
+
+Three properties follow, under stated assumptions.
+
+| Result | Statement |
+| --- | --- |
+| FER control | `FER(T) <= q` for the whole process, and at any stopping time |
+| Power consistency | True evolution rate goes to 1 as validation and pool sizes grow |
+| Gain lower bound | Final deployment gain is bounded below in terms of miss probability and tolerance |
+
+The stopping-time part matters operationally: you may stop the campaign early based on what
+you have seen, and the guarantee survives. That is exactly what a stop rule needs and almost
+never has.
+
+### The numbers
+
+30 rounds, 5 seeds, 200 validation examples, 300 held-out test examples. `q = 0.30`,
+`epsilon = 0.10`, `beta = 0.01`. Gain in points, FER0 counting all accepted non-improving
+updates, MDD as maximum drawdown in points.
+
+| Dataset | Model | Greedy gain | Greedy FER0 | TRUST gain | TRUST FER0 | TRUST MDD |
+| --- | --- | --- | --- | --- | --- | --- |
+| HotpotQA | DeepSeek | 7.87 | 64.67 | 11.58 | 10.00 | 0.02 |
+| HotpotQA | Qwen | 20.66 | 44.67 | 27.72 | 0.00 | 0.00 |
+| DROP | DeepSeek | 36.24 | 35.28 | 31.47 | 0.00 | 0.00 |
+| DROP | Qwen | 15.15 | 37.38 | 17.22 | 0.00 | 0.00 |
+| APPS | DeepSeek | 33.89 | 41.08 | 34.55 | 0.00 | 0.00 |
+| APPS | Qwen | 28.03 | 50.44 | 26.53 | 6.67 | 0.27 |
+
+Averaged over the six settings: FER0 falls from 45.59 to 2.78 percent, maximum drawdown from
+4.963 to 0.047 points, and mean final gain is the highest of any method at 24.84 points.
+Greedy's worst drawdown is 8.48 points. TRUST's worst is 0.27.
+
+The trajectory shape is the part that explains the mechanism. Greedy climbs fast and then
+declines, because it keeps accepting noise and building on it. TRUST climbs slower, overtakes
+greedy in later rounds, and keeps what it has.
+
+### The gate that is too strict
+
+The paper's most useful negative result is not about greedy. It is about the conservative
+baselines.
+
+SGM-B, which controls the familywise error rate across rounds with a Bernstein test, **never
+accepts an update in any setting**. SGM-H accepts three updates across all runs. Both are
+technically safe and practically useless: a gate that never opens has an FER of zero and a
+gain of zero.
+
+That is the counterweight to every "just be more conservative" instinct. Safety and power are
+two axes, and the whole point of an error budget is to spend it, not hoard it. PACE, which
+controls false acceptance within a single round, sits between: zero FER0 in five of six
+settings, but gains of 10.15, 26.42, 29.70, 13.22, 28.68 and 26.24, which is below TRUST's
+final score in all six.
+
+### Sensitivity
+
+On HotpotQA with DeepSeek: raising `beta` from 0 to 0.03 takes FER0 from 23.33 percent to
+zero, and final gain peaks at 11.58 points at `beta = 0.01` against 10.97 with no correction.
+So a moderate correction both improves safety and improves gain, which is not the usual
+trade-off shape. Larger `q` and `epsilon` make the gate more aggressive, raising both TER and
+FER0, which is what the definitions predict.
+
+### The EVO reading
+
+This is the Must layer with a budget attached, and the most rigorous version of E5 and E6 in
+the whole literature.
+
+- **The gate is a measured component.** You would never ship a cache without a hit-rate
+  meter. TRUST says the same about your accept rule: measure its false acceptance rate, and
+  give it an error budget.
+- **Declare the tolerance.** `epsilon` is a Must-with-tolerance: an explicit statement of how
+  much regression the business will absorb per revision. That is a Plan-level number and it
+  belongs in the revision card.
+- **Declare the budget.** `q` is the fraction of accepted revisions you are willing to have
+  been wrong about. Thirty percent is loose for a product harness, and it is set that way to
+  give a weak proposer room to move. Write yours down, then tighten it as the proposer
+  improves.
+- **The stopping rule is now sound.** The earlier stop rule in this page ("two consecutive
+  flat revisions") is a heuristic. A sequential test with a stopping-time guarantee is the
+  principled version, and it is not much harder to implement.
+
+### Where TRUST is weak
+
+- **Small validation pools.** 200 examples, 30 rounds. The guarantee holds, but the power is
+  limited by the data, and most teams have less validation data than this, not more.
+- **The proposer assumption.** Power requires that the proposer eventually proposes a real
+  improvement. In a domain where the harness is already near its ceiling, the gate correctly
+  accepts almost nothing, and the guarantee tells you nothing about whether to keep looking.
+- **The guarantee is about the accept set.** It bounds the proportion of accepted updates
+  that were bad. It does not bound how much good you left on the table, and it does not make
+  the final harness good in absolute terms.
+- **No cost accounting.** The tax paper's lesson is not incorporated: verification here is
+  free in the analysis and expensive in reality, and sequential testing changes how much
+  verification you buy.
+- **Three benchmarks, two models.** QA and code, both with clean validation sets. A flaky
+  enterprise suite violates the exchangeability assumptions in ways the paper does not test.
+- **`q = 0.30` is a loose budget.** A thirty percent false acceptance rate is defensible for
+  a research loop and indefensible for a production harness. The paper's own results show the
+  method works at much lower empirical FER0, so the budget is conservative in practice, but
+  the headline number should be read as a setting, not a recommendation.
+
+## Beneath the Surface: recursion that moves tasks around
+
+The third audit asks a question that sounds trivial and is not: when the score goes up, what
+actually changed?
+
+The answer, across four methods and sixteen evolved agents: **everything moved. Tasks were
+gained and tasks were lost, in every single lineage.** The aggregate score is a net figure
+that hides a gross flow.
+
+### The setup
+
+Four recipes, two harnesses, two benchmarks, sixteen lineages, one model (GPT-5.4).
+
+| Factor | Levels |
+| --- | --- |
+| Method | AHE, HyperAgents (implementation-centric); A-Evolve, GEPA (reflection-centric) |
+| Harness | MiniSWE 2.4.5 (source-editable), Codex 0.143.0 (outer-layer only: prompts, skills, config, orchestration) |
+| Benchmark | tau3-Banking, 97 general tasks with simulated users; Terminal-Bench 2, 89 coding tasks |
+| Protocol | 8 passes per task, train/validation/test split, evolution sees train and validation only |
+
+Two metrics, and the distinction is the whole paper.
+
+- **Reliability (Avg@8).** Mean success across eight passes. Does the agent succeed on
+  average?
+- **Coverage (Pass@8).** Fraction of tasks solved at least once in eight passes. Can the
+  agent solve it at all?
+
+A single-pass evaluation cannot tell these apart, and most reported numbers are single-pass.
+That is not a minor methodological quibble. It is the difference between "this harness is
+better" and "this harness is luckier".
+
+### Reliability and coverage
+
+Deltas in points against the matching seed.
+
+| Benchmark | Harness | Method | Reliability | Coverage |
+| --- | --- | --- | --- | --- |
+| tau3-Banking | MiniSWE | AHE | +5.4 | +11.3 |
+| tau3-Banking | MiniSWE | HyperAgents | +5.2 | +3.1 |
+| tau3-Banking | MiniSWE | A-Evolve | -1.2 | +1.0 |
+| tau3-Banking | MiniSWE | GEPA | +0.8 | +4.1 |
+| tau3-Banking | Codex | AHE | +5.9 | +6.2 |
+| tau3-Banking | Codex | HyperAgents | +6.6 | +9.3 |
+| tau3-Banking | Codex | A-Evolve | -2.2 | +1.0 |
+| tau3-Banking | Codex | GEPA | -0.8 | -3.1 |
+| Terminal-Bench 2 | MiniSWE | AHE | +4.4 | +1.1 |
+| Terminal-Bench 2 | MiniSWE | HyperAgents | +1.8 | -1.1 |
+| Terminal-Bench 2 | MiniSWE | A-Evolve | +2.1 | 0.0 |
+| Terminal-Bench 2 | MiniSWE | GEPA | +2.7 | +2.2 |
+| Terminal-Bench 2 | Codex | AHE | +2.1 | +1.1 |
+| Terminal-Bench 2 | Codex | HyperAgents | +2.7 | -3.4 |
+| Terminal-Bench 2 | Codex | A-Evolve | -2.0 | -2.2 |
+| Terminal-Bench 2 | Codex | GEPA | -1.8 | -3.4 |
+
+Reliability improves in eleven of sixteen lineages, coverage in ten. Some move the two metrics
+in opposite directions, and one improves reliability only. A paper that reported "average
+improvement" would have averaged all of that into a single number and told you nothing.
+
+### Turnover is the finding
+
+Every one of the sixteen champions gained coverage on some tasks and lost coverage on others.
+Some examples, as gained and lost task counts.
+
+| Benchmark | Harness | Method | Gained | Lost |
+| --- | --- | --- | --- | --- |
+| tau3-Banking | MiniSWE | AHE | 15 | 4 |
+| tau3-Banking | MiniSWE | HyperAgents | 13 | 10 |
+| tau3-Banking | Codex | HyperAgents | 11 | 2 |
+| Terminal-Bench 2 | MiniSWE | AHE | 4 | 3 |
+| Terminal-Bench 2 | Codex | HyperAgents | 2 | 5 |
+
+The HyperAgents row on tau3-Banking with MiniSWE is the case the abstract quotes: reliability
+rose 5.2 points **while losing ten previously covered tasks**. Thirteen gained, ten lost, net
+plus three coverage, plus five reliability. Every one of those ten losses is a user who used
+to be served and now is not.
+
+The behavioral audit of twenty-two selected task transitions says the differences are
+concrete rather than mysterious. Gains cluster in state and dependency management (seven
+increases, one decrease): preserving inputs, respecting action order, leaving a self-contained
+executable result. Losses cluster in exact grounding (one increase, four decreases): matching
+product conditions, dates, output characters. Two other categories, completion and handoff,
+and tool discovery and recovery, split more evenly.
+
+That is a testable claim about what evolution does. It tends to buy robustness in process and
+pay for it with precision in detail.
+
+### Cost
+
+Eight of the eleven reliability-improving champions cost more per trial than their seed. The
+three that got cheaper were all source-editable harness runs on coding tasks, where the
+harness could remove work rather than add it.
+
+Evolution cost ran from 723.4 million to 2,372.8 million tokens per campaign, against
+deployment costs of 5.1 to 8.9 USD per task. On tau3-Banking with MiniSWE, AHE cost 1,235.0
+million tokens of evolution to reach a champion, HyperAgents 867.0, A-Evolve 1,057.6 and GEPA
+2,262.8. Recall from the tax paper that this is the same failure mode at a different scale:
+the campaign is not free, and nobody reports it in the same table as the gain.
+
+The cost picture has one genuine nuance. Per-trial cost and deployment efficiency can diverge,
+because a better harness may need fewer attempts to reach a coverage target. MiniSWE with AHE
+on tau3-Banking reaches 56.7 percent coverage in four passes, beating the seed's 54.6 percent
+in eight, at lower total deployment cost. So "costs more per attempt" is not the same as
+"costs more per outcome". Report both, and report the coverage target you are paying for.
+
+### Generalization
+
+Test reliability improves in ten of sixteen lineages, including seven of eight
+implementation-centric cases across both harness types and both domains. Reflection-centric
+gains are harness-dependent: most source-editable cases improve, and **all outer-layer-only
+cases decline**.
+
+External transfer is more selective still. Coverage falls for seven of eight champions on the
+general-task target and rises for seven of eight on the coding target, across both harness
+types and both paradigms. Reliability moves the other way: all source-editable champions
+improve general-task transfer reliability and lose coding-task transfer reliability.
+
+The pattern is coherent if you think about what a harness change encodes. A change that
+encodes a task family's conventions transfers to a sibling family and hurts on a different
+one. There is no such thing as general harness improvement, only improvement relative to a
+distribution you did or did not name.
+
+### The four operators
+
+The paper then intervenes on the operators directly, which is the part that turns diagnosis
+into design.
+
+**Select: current score is a bad predictor.** Give each champion pool of four parents, let
+each produce three candidates through the same analysis and mutation process, then ask which
+parent produced the best candidates. The native selection rules beat random (25 percent) on
+coding tasks at 59.5 and 55.7 percent, and fall **below** random on general tasks at 17.5 and
+8.8 percent. Selecting the best current agent is actively counterproductive on tau3-Banking.
+
+**Analyze: specific beats generic.** Fifteen of sixteen components outperform their matched
+generic reminder, which is not a high bar: the generic reminders mostly do nothing. On tau3
+with MiniSWE, a specific component takes reliability from 27.4 to 32.1 while the generic
+reminder moves it to 27.8. On Terminal-Bench with Codex, the generic reminder *lowers*
+reliability from 69.9 to 65.7. "Check your work carefully" is not a harness improvement.
+
+**Mutate: combinations are not additive.** Six of eight champions beat either isolated
+component, including all coding cases. Two general-task cases, one per harness, favor a
+subset: the full champion is worse than one component alone. In one coding case only the
+combination beats the seed. So components interact, in both directions, and the sign depends
+on the harness.
+
+**Gate: stricter admission is not uniformly better.** Adding a constraint (higher mean success
+plus incumbent-relative regression at most 0.05) reduced best-candidate retention from fifteen
+pools to six. Its size-normalized score fell for the source-editable harness and rose for the
+outer-layer-only harness. A stricter gate is safer and loses candidates you wanted. That is
+the same tension TRUST formalizes, arriving from the empirical side.
+
+### AGE, the constructive follow-up
+
+The authors do not stop at diagnosis. EvoAudit is an agent-assisted workflow that reads
+archived evolution runs and proposes operator revisions with evidence and applicability
+conditions. Installing four of those revisions into A-Evolve gives AGE: regression-aware
+tie-breaking in select, behavior-grounded diagnosis in analyze, dependency-closed
+mechanism-linked mutation, and a score-first cost-aware gate.
+
+AGE beats every reference method on both harnesses in both benchmarks.
+
+| Benchmark | Harness | Seed reliability | AGE reliability | Seed coverage | AGE coverage | Gained | Lost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| tau3-Banking | MiniSWE | 27.4 | 34.0 | 54.6 | 66.0 | 13 | 2 |
+| tau3-Banking | Codex | 30.3 | 38.1 | 56.7 | 67.0 | 15 | 5 |
+| Terminal-Bench 2 | MiniSWE | 65.9 | 71.8 | 86.5 | 89.9 | 5 | 2 |
+
+Note the last two columns. AGE gains fifteen tasks on tau3 with Codex and loses five. The
+turnover does not disappear. What improves is the ratio: more gained per lost, and a
+regression-aware tie-break that prefers the parent with fewer seed-relative regressions when
+scores tie.
+
+Eight domain experts reviewed the four operator revisions blind to the proposal: direction
+agreement 6 of 8, evidence support 6.25 of 8, problem addressing 6.5 of 8, endorsement for
+validation 6.75 of 8. That is a modest but real signal, and it is the kind of check that
+should be standard before you install a proposed operator change.
+
+### The EVO reading
+
+This paper is E8 with a microscope, and it produces three rules that belong in any acceptance
+gate.
+
+**Report gross, not net.** Gained and lost tasks are separate metrics. A gate that only sees
+the mean cannot see that it is trading your best customers for new ones.
+
+**Reliability and coverage are different products.** Coverage is a capability claim. Reliability
+is a service claim. A harness that solves a task one time in eight is not a 12.5 percent
+capability, it is a support ticket.
+
+**Preservation is a Must, not a preference.** The regression count belongs in the acceptance
+rule, at the same level as the cost ceiling. AGE's select tie-break is the cheapest version:
+among equally good candidates, prefer the one that regresses least.
+
+### Where it is weak
+
+- **Eight passes is expensive.** Ninety-seven tasks times eight passes times sixteen lineages is
+  a serious evaluation budget, and it is the reason this study exists and the reason it will
+  not be replicated often.
+- **One model.** All sixteen lineages use GPT-5.4. A model that manages context better might
+  shrink the harness effects, which is the RHI caveat all over again.
+- **Two harnesses, two domains.** The source-editable versus outer-layer-only distinction is
+  well chosen and still only two points.
+- **Percentage granularity.** With 97 and 89 tasks, one task is about one point. Effects of
+  two to three points are two to three tasks.
+- **AGE is not independent.** The same authors diagnose the problem and validate the fix, on
+  the same benchmarks, with the same harnesses. The expert review helps, and it is not a
+  substitute for a replication by someone with no stake in the answer.
+
+## The rest of the 2026 wave
+
+The six papers above are the spine. Around them, November 2026 produced a dense cluster of
+work that attacks the same problem from different angles. This table is a map, not a
+literature review.
+
+| Paper | arXiv | Contribution in one line |
+| --- | --- | --- |
+| Criteria Exposure | 2611.08318 | Showing the verifier's success criteria to the evolving agent raises benchmark scores that vanish when the criteria change slightly, so the agent learned the verifier |
+| Frozen Weights | 2611.11342 | Failure traces add 4.0 points over a matched search that never sees them, but the search process alone got about 60 percent of the total gain, and the effect vanishes in full conversations |
+| Third Eye | 2611.12988 | A further native update after selection erases or reverses the immediate gain: near-zero selected utility falls 1.78 points on continuation |
+| Flex-RSI | 2611.08946 | A benchmark for harness-level self-improvement on vision and robotics tasks under a fixed budget |
+| SelfImprove-Bench | 2611.02797 | Separates capability gain from scenario fitting, with tiered tasks, unseen difficulties and per-trace attribution |
+| RSI-Env | 2611.01736 | A persistent environment with an independent host controller, where each accepted model-harness version runs the next improvement round |
+| BOXBOX | 2611.09218 | Harness revision triggered inside a long-running task, for open-ended performance optimization, with the PerfRace benchmark |
+| JoMoHa | 2611.11499 | Joint RL training of an executable harness-generation policy and a task policy, after showing naive alternation degrades both |
+| Verify by Doing | 2611.15276 | Co-evolving actor and evaluator harnesses when no external feedback exists, with tool-using verification of artifacts and state |
+| Experience-Handoff RL | 2611.16409 | Learning to construct the handed-off experience artifact with gradients instead of hand-writing the playbook |
+| Singularity-Bench | 2611.16591 | Six end-to-end AI development tasks (pre-training, mid-training, post-training, inference, harness, orchestration) scored against human-engineered baselines |
+| RSI-PDEbench | 2611.14949 | 1,001 PDE cases across 42 templates, with clean, noisy and hidden-equation settings for self-improving agents |
+
+Three patterns are worth naming.
+
+**The measurement papers are converging on the same verdict.** Criteria Exposure, Frozen
+Weights and Third Eye all find that a benchmark gain is not the thing you thought it was:
+it may be verifier fitting, or search-process luck, or a gain that the next update destroys.
+Any of the three would be a footnote. Together they are a methodological correction.
+
+**The environment papers are moving from benchmark to substrate.** RSI-Env and
+Singularity-Bench both stop treating "the task" as a fixed list and start treating the
+environment, the versioning and the handoff between generations as the object of study. That
+is the right direction, and it is much harder to evaluate.
+
+**The joint-optimization papers are reopening the weights question.** JoMoHa and
+Experience-Handoff RL both find that a harness optimized against a frozen model is leaving
+value on the table, and that naively alternating the two makes things worse. That is the
+boundary this page does not cross. Everything here assumes frozen weights, which is the
+practical assumption for a team that does not train models. If you do train them, the
+verification problem gets harder in exactly the way the "what does not transfer" section
+describes.
+
 ## The same loop in three costumes
 
 Put the three side by side and the shared skeleton shows.
@@ -612,6 +1257,21 @@ Put the three side by side and the shared skeleton shows.
 | Frozen element | Evaluation prompt withheld from optimizer | Test set and router labels | SHA-pinned files and invariants |
 | Main risk it addresses | Cost of search | Local optima | Reward hacking and noise |
 
+### The three audits side by side
+
+The three audits do not optimize anything. They measure three different things, and each maps
+to one number you should be tracking.
+
+| Audit | Question | Unit | Headline | What it changes in your loop |
+| --- | --- | --- | --- | --- |
+| RSI Tax | Does the loop pay? | Tokens | Tax of 109 to 393 percent for three of four methods; unused share 24 to 64 percent | Report tax beside accuracy; budget verification |
+| TRUST | Is the gate honest? | False accept rate | 45.59 percent of greedy accepts are bad; 2.78 percent under a tested gate | Put a declared error budget on accepts |
+| Beneath the Surface | What actually moved? | Tasks | All 16 lineages gain and lose tasks; reliability up 5.2 while losing 10 tasks | Report gained and lost separately; regress-guard the gate |
+
+The three questions are independent, and a loop can pass one while failing the others. A loop
+can be cheap and wrong. A loop can be statistically honest and too expensive. A loop can be
+both and still be trading your best tasks for new ones.
+
 ### The five parts every loop needs
 
 1. **A frozen evaluator.** Otherwise the loop optimizes the evaluator.
@@ -621,10 +1281,21 @@ Put the three side by side and the shared skeleton shows.
 5. **An acceptance rule with elitism.** Keep the incumbent unless the candidate wins under
    the gate.
 
+After the three audits, that list is incomplete. Add three.
+
+6. **A tax meter.** Task tokens and improvement tokens counted separately, per revision.
+7. **A gate with a stated error budget.** Not "looks better", but "passes a test at a declared
+   false acceptance rate".
+8. **A task-level ledger.** Gained, lost, unchanged, and the deployment cost of each.
+
+The first five make the loop run. The last three make it worth running.
+
 The papers differ on how much they invest in each. RHI is all-in on cheap. The branching
 paper is all-in on diversity and selection. InfraRSI is all-in on verification and memory.
+The audits are all-in on measurement, and they exist because the first three papers did not
+report what the loop cost, whether the gate was honest, or what the score hid.
 
-A practical system needs all five, and that is the real finding: **no single paper gives you
+A practical system needs all eight, and that is the real finding: **no single paper gives you
 a complete harness RSI loop.** You have to compose them.
 
 ### What each contributes to a design
@@ -637,6 +1308,15 @@ a complete harness RSI loop.** You have to compose them.
 - From InfraRSI: lock the contract before you search, treat failures as censored data, record
   the cost of failed trials, calibrate noise instead of hardcoding a threshold, and store
   experience conditioned on the environment.
+- From the tax paper: count task tokens and improvement tokens separately, expect verification
+  to dominate the bill, and treat a bounded note as a serious baseline before you build a
+  search.
+- From TRUST: separate the gate from the proposer, declare a tolerance and an error budget,
+  correct for validation reuse, and measure the gate's false acceptance rate like any other
+  component.
+- From Beneath the Surface: measure reliability and coverage separately, report gained and
+  lost tasks, treat regression count as a Must, and do not assume the best current agent is
+  the best parent.
 
 ## The EVO reading
 
@@ -650,12 +1330,16 @@ harness as the product.
 | E2 Do high-risk steps early | Build the evaluator and the reward-hack test before the optimizer | Discovering in week six that the loop cheats |
 | E3 Improve the most valuable objectives first | Rank candidate harness changes by expected value per search dollar | Spending the budget on a component with a 0.5 point ceiling |
 | E4 Evolve the existing system | Optimize the harness you actually run, on your actual tasks | A benchmark harness that shares nothing with production |
-| E5 Design to cost dynamically | Every iteration has a search budget, and search spend is a first-class metric | A loop whose search costs more than the delivery it enables |
-| E6 Design to performance dynamically | Verify quality attributes, not just tests. Loss tolerance, latency, review minutes | Adopting compression because it is cheaper while losing 5 points |
+| E5 Design to cost dynamically | Every iteration has a search budget, and search spend is a first-class metric in the same units as task execution | A loop whose search costs 300 percent of the delivery it enables |
+| E6 Design to performance dynamically | Verify quality attributes, not just tests. Loss tolerance, latency, review minutes, and coverage as well as reliability | Adopting compression because it is cheaper while losing 5 points |
 | E7 Invest in an open-ended architecture | The harness must be toggleable and revertible per component | A monolith where one bad revision cannot be undone |
-| E8 Reward results, not effort | Score the loop on delivered value per dollar, not on iterations run or proposals accepted | A dashboard that rewards churn |
-| E9 Prioritize by value, not queue position | Stop the loop when the value per iteration drops below the cost | Running twenty iterations to gain 0.3 points |
+| E8 Reward results, not effort | Score the loop on delivered value per dollar, and on tasks gained against tasks lost, not on iterations run or proposals accepted | A dashboard that rewards churn, or a mean that hides ten regressions |
+| E9 Prioritize by value, not queue position | Stop the loop when the value per iteration drops below the cost, using a stop rule with an error budget | Running twenty iterations to gain 0.3 points |
 | E10 Learn fast, change fast | Version every revision, keep a decision log, replay failures | Anecdotal tuning with no memory |
+
+The principle table tells you how to decide. The three audits tell you how often the decision
+is wrong, what it cost, and what it moved. That is the part EVO leaves implicit and every
+engineering team eventually asks for.
 
 ### The Must and Plan structure is the whole trick
 
@@ -666,9 +1350,21 @@ InfraRSI's sixteen invariants are Must levels in everything but name. Speed is t
 objective. Correct workload, permitted precision, and timing agreement are Must. Break one and
 the candidate scores zero, no matter how fast it looked.
 
+TRUST contributes a subtler version. Its tolerance `epsilon` and error budget `q` are not Must
+constraints on the harness. They are Must constraints on the **gate**. A revision is rejected
+if its acceptance cannot be justified at the declared false acceptance rate, regardless of how
+good the validation number looks. That is a constraint on the decision procedure rather than
+on the product, and it is the layer most teams never write down.
+
+Beneath the Surface contributes a third. A revision that regresses previously solved tasks is
+not a trade to be weighed, it is a delivery failure for those tasks. Gained and lost are not
+interchangeable, because the lost tasks have owners.
+
 RHI has no explicit Must layer, and that is its weakest point. It relies on the evaluator
 prompt to implicitly encode quality. The branching paper relies on benchmark tests, which is
-a Must layer in practice.
+a Must layer in practice. The tax paper has no Must layer at all, because it measures cost
+rather than gating it, which is why its conclusion is "this method does not pay" rather than
+"reject this revision".
 
 If you build one thing from this section, build the Must layer. It is the cheapest part and
 it is what makes the loop safe to run unattended.
@@ -697,43 +1393,48 @@ all along.
 Here is the composition. It is deliberately boring and deliberately slow to run unattended.
 
 ```
-        +-----------------------------------------------------------+
-        |  FROZEN CONTRACT                                          |
-        |  task, acceptance check, invariants, budget, holdout      |
-        |  hashed. optimizer may read, never write.                 |
-        +-----------------------------+-----------------------------+
+   +--------------------------------------------------------------------------+
+   |  FROZEN CONTRACT                                                       |
+   |  task, acceptance check, invariants, budget, holdout                   |
+   |  hashed. optimizer may read, never write.                              |
+   +----------------------------------v---------------------------------------+
                                       |
-   +----------------------------------v----------------------------------+
-   |  INNER LOOP: agent runs the task under harness H(i)                |
-   |  tools, context, planner, subagents, budgets, tracing              |
-   +----------------------------------+---------------------------------+
+   +----------------------------------v---------------------------------------+
+   |  INNER LOOP: agent runs the task under harness H(i)                    |
+   |  tools, context, planner, subagents, budgets, tracing                  |
+   +--------------------------------------------------------------------------+
                                       |  artifact, receipt, cost, trace
-   +----------------------------------v---------------------------------+
-   |  VERIFIER: deterministic checks first, then behavioral, then rubric|
-   |  failure taxonomy attached to every verdict                        |
-   +----------------------------------+---------------------------------+
+   +----------------------------------v---------------------------------------+
+   |  VERIFIER: deterministic checks first, then behavioral, then rubric    |
+   |  failure taxonomy attached to every verdict                            |
+   +--------------------------------------------------------------------------+
                                       |  verdict plus failure class
-   +----------------------------------v---------------------------------+
-   |  COMPARATOR: H(i) against H(i-1), paired, same scenarios           |
-   |  visible dev set for the optimizer, hidden holdout for you         |
-   +----------------------------------+---------------------------------+
-                                      |  preference plus history
-   +----------------------------------v---------------------------------+
-   |  MUTATOR: proposes H(i+1), one component at a time                 |
-   |  sees history, never the rubric, never the holdout                 |
-   +----------------------------------+---------------------------------+
+   +----------------------------------v---------------------------------------+
+   |  COMPARATOR: H(i) against H(i-1), paired, same scenarios               |
+   |  visible dev set for the optimizer, hidden holdout for you             |
+   +--------------------------------------------------------------------------+
+                                      |  preference, interval, task-level diff
+   +----------------------------------v---------------------------------------+
+   |  MUTATOR: proposes H(i+1), one component at a time                     |
+   |  sees history, never the rubric, never the holdout                     |
+   +--------------------------------------------------------------------------+
                                       |  proposed diff to harness only
-   +----------------------------------v---------------------------------+
-   |  GATE: regression, holdout delta, cost delta, safety, human        |
-   |  accept, reject, or promote. reject keeps the incumbent.           |
-   +----------------------------------+---------------------------------+
-                                      |  accepted revision plus reason
-   +----------------------------------v---------------------------------+
-   |  EXPERIENCE STORE: what worked, on which model, on which tasks     |
-   +--------------------------------------------------------------------+
+   +----------------------------------v---------------------------------------+
+   |  GATE: invariants, regression count, holdout delta, cost delta.        |
+   |  Sequential test at a declared error budget. Reject keeps incumbent.   |
+   +--------------------------------------------------------------------------+
+                                      |  accepted revision, reason, test result
+   +----------------------------------v---------------------------------------+
+   |  LEDGER: tasks gained, lost, unchanged; delivery tokens and tax        |
+   |  tokens per revision. This is the number you report, not the mean.     |
+   +--------------------------------------------------------------------------+
+                                      |  tax rate, unused share, regressions
+   +----------------------------------v---------------------------------------+
+   |  EXPERIENCE STORE: what worked, on which model, on which tasks         |
+   +--------------------------------------------------------------------------+
 ```
 
-### The eight components
+### The ten components
 
 | Component | Job | Failure if missing |
 | --- | --- | --- |
@@ -742,12 +1443,18 @@ Here is the composition. It is deliberately boring and deliberately slow to run 
 | Verifier | Deterministic before probabilistic | Judged gains that do not exist |
 | Comparator | Paired comparison, same snapshot, same runs | Noise read as progress |
 | Mutator | Propose one change, with a rationale and an estimate | Random walk with a story |
-| Gate | Accept only on holdout plus cost plus safety | Silent regression |
+| Gate | Accept only on holdout plus cost plus safety, at a declared error rate | Silent regression |
+| Ledger | Gained, lost, unchanged tasks, plus delivery and tax tokens | A mean that hides a trade |
+| Tax meter | Improvement tokens counted separately from task tokens | A loop that costs more than it delivers |
 | Experience store | Record what worked and where | Every campaign starts from zero |
 | Rollback | One command to restore `H(i-1)` | A bad revision you cannot undo |
 
 The rollback item is not an afterthought. If reverting is expensive, the gate becomes
 political, and a gate that is political is not a gate.
+
+The ledger item is the one teams add last and need first. Without it you cannot tell a
+trade from an improvement, and every one of the sixteen lineages in the audit section
+would have looked like a win.
 
 ### A revision card
 
@@ -770,27 +1477,46 @@ search_cost:
   traces: 1
   judgments: 20
   usd: 3.40
+tax:
+  task_tokens: 1840000
+  rsi_tokens: 96000
+  rate_pct: 5.2
+  unused_share_pct: 4.0
 measurement:
   scenarios: dev-v4
   holdout: holdout-v2
   runs: 3
   model: pinned-2026-11-01
+  gate_test: sequential e-value, q=0.10, epsilon=0.02
+task_ledger:
+  gained: 3
+  lost: 0
+  unchanged: 14
 decision: null
 ```
 
 ### Budget the search, not just the task
 
-The loop has two budgets and most teams only track one.
+The loop has three budgets and most teams only track one.
 
 | Budget | What it covers | Practical rule |
 | --- | --- | --- |
 | Delivery budget | Tokens, steps, minutes per task | Set per task contract, as in the harness design guide |
 | Search budget | Traces, judgments, dollars per revision | Small enough that one revision cannot blow the week |
-| Total budget | Delivery plus search | If search exceeds 20 percent of delivery spend, the loop is not paying for itself |
+| Tax | Improvement tokens as a share of task tokens | Measure it. 100 percent means the loop costs as much as the work |
+| Total budget | Delivery plus tax | If tax exceeds 20 percent of delivery spend, the loop is not paying for itself |
 
-That third row is the one that keeps a self-improving harness honest. A loop that spends
+That last row is the one that keeps a self-improving harness honest. A loop that spends
 40 percent of its budget improving itself had better be producing harness improvements that
-generalize, or it is a very expensive hobby.
+generalize, or it is a very expensive hobby. The published methods sit at 109 to 393 percent,
+which is the empirical answer to "how bad can it get": five to twenty times worse than the
+threshold a team should accept.
+
+One nuance before you copy the 20 percent rule. The tax paper's tax is measured over a task
+stream with per-task updates. A campaign that improves a harness once and then serves ten
+thousand tasks has a different denominator, and a much better ratio. The rule is about the
+loop's steady state, not about the first week. Write the denominator down when you report the
+number, because a tax rate without a horizon is meaningless.
 
 ### Acceptance rule with elitism
 
@@ -798,17 +1524,33 @@ RHI's missing piece, stated as a rule:
 
 ```
 accept(H(i+1)) iff
-    resolved(H(i+1)) >= resolved(H(i)) - epsilon_regression     # quality
-and cost(H(i+1))    <= cost(H(i)) * (1 + cost_ceiling)          # cost
-and invariants(H(i+1)) == all_true                              # must
+    invariants(H(i+1)) == all_true                              # must
+and regressions(H(i+1)) == 0 || regressions(H(i+1)) < regressions(H(i))  # preservation
 and holdout_delta(H(i+1)) > 0                                   # generalization
+and cost(H(i+1))    <= cost(H(i)) * (1 + cost_ceiling)           # cost
+and gate_test(H(i+1), q) == pass                                # statistical honesty
 ```
 
-Four clauses, each corresponding to a known failure. Quality stops a lucky visible-set win.
-Cost stops the compression trap. Invariants stop the cheat. Holdout stops the overfit.
+Five clauses, each corresponding to a known failure.
 
-The last clause is the one people skip, and it is the one that separates a search from a
+| Clause | Failure it stops |
+| --- | --- |
+| Invariants | The cheat |
+| Regressions | Trading your best tasks for new ones |
+| Holdout delta | Overfitting the visible set |
+| Cost | The compression trap |
+| Gate test | Accepting noise and building on it |
+
+The gate test is the one the audits added, and it is the cheapest to add if you already have
+a paired comparator. You need a sequential test, a declared tolerance, and a declared error
+budget. That is a page of code, and it converts "this looked better" into "this passed a test
+at a stated false acceptance rate".
+
+The holdout clause is the one people skip, and it is the one that separates a search from a
 self-delusion. Visible-set improvement is nearly free to obtain. Holdout improvement is not.
+The preservation clause is the one people add last and regret not having: a revision that
+gains five tasks and loses six is not a net positive, it is a product change you did not
+intend to ship.
 
 ## The three clocks
 
@@ -893,16 +1635,45 @@ version, not per iteration, or you will overfit the holdout by watching it.
 | Holdout delta | Hidden score change per accepted revision | Is the movement real |
 | Overfit gap | Visible minus hidden, per iteration | When memorization starts |
 | Search cost | Traces, judgments, dollars per revision | Is the loop affordable |
+| Tax rate | Improvement tokens divided by task tokens, per revision | Is the loop paying for itself |
+| Unused share | Share of improvement tokens attached to state never read later | Is the proposer producing things nobody uses |
 | Cost per point | Search spend divided by holdout gain | The number to compare against test-time scaling |
 | Acceptance rate | Accepted revisions over proposed | Is the mutator any good |
+| False accept rate | Accepted revisions that were worse on the holdout, over accepts | Is the gate honest |
 | Revert rate | Accepted then reverted later | Is the gate too loose |
 | Time to plateau | Iterations until holdout gain clears noise | Is there headroom |
-| Regression rate | Previously passing scenarios now failing | Is the loop trading breadth for depth |
+| Gained and lost | Tasks newly solved and tasks newly broken | Is the loop trading breadth for depth |
+| Reliability and coverage | Mean success across runs, and solve-at-least-once | Is the gain consistency or luck |
 | Failure taxonomy shift | Distribution of failure classes per iteration | Where the bottleneck moved |
 
-That last metric is the most actionable and the most often omitted. RHI's story is a taxonomy
-shift: contracts improved, cache traffic fell, and the remaining failures moved. A single
-score would have hidden the mechanism.
+The taxonomy metric is the most actionable and the most often omitted. RHI's story is a
+taxonomy shift: contracts improved, cache traffic fell, and the remaining failures moved. A
+single score would have hidden the mechanism.
+
+The false accept rate is the one with a published baseline. Greedy gates run at 35 to 65
+percent in the TRUST experiments. If your gate has never been measured, assume it is in that
+range, because the mechanism that produces it (a point estimate on a reused validation pool)
+is the default behavior of every loop in this page.
+
+### Simulating the gate
+
+The gate is the one component you can test in isolation, and almost nobody does.
+
+1. **Freeze a pool of candidate revisions.** Twenty is enough to start. For each, record the
+   validation score the gate would see and the holdout delta the gate must not see.
+2. **Replay the gate.** Run your acceptance rule over the pool in order, updating the
+   incumbent as it goes, using only validation evidence.
+3. **Count false accepts.** An accept where the replayed candidate's holdout delta is at or
+   below `-epsilon` is a false evolution. Divide by accepts.
+4. **Inject known-bad candidates.** Take the champion and break one component deliberately:
+   remove a tool, invert a rule, drop a contract. You know the true delta is negative. A gate
+   that accepts these is not gated.
+5. **Report acceptance rate and false accept rate together.** One without the other is
+   meaningless, as the SGM-B result shows: zero false accepts, zero accepts.
+
+A cheap version of step 1 is to use the revision log from a previous campaign. You already
+have the candidates and the scores. Replaying them through a new gate costs nothing but
+compute, and it is the highest-value hour in the whole build.
 
 ### Simulating the router
 
@@ -938,9 +1709,12 @@ to the loop rather than the product.
 ### Simulating cost honestly
 
 The branching paper's own limitation is the template: unequal token budgets make gains hard
-to attribute. So in simulation, log:
+to attribute. The tax paper is the answer to it: count the improvement tokens separately, and
+report them against the task tokens.
 
 - Total tokens by role: action model, proposer, judge, router.
+- Improvement tokens split into verify, explore and write. Expect verify to dominate.
+- The share of improvement tokens attached to state that was never read again.
 - Total dollars, including the judge, which is easy to forget.
 - GPU or wall-clock hours for verification.
 - Human minutes reading traces and diffs.
@@ -948,6 +1722,11 @@ to attribute. So in simulation, log:
 Then answer the only question that matters: **compared with spending the same budget on more
 test-time compute, does the loop win?** If you cannot answer that, you have built a very
 elaborate way to feel productive.
+
+There is one simulation trick worth naming. Run the same budget twice: once as a search loop,
+once as N independent attempts at the same tasks with no learning. If the loop does not beat
+the flat baseline at equal spend, the loop is not adding value, it is adding process. That
+comparison is trivially cheap to set up and it is the one the literature keeps skipping.
 
 ## The overfitting curve
 
@@ -998,9 +1777,30 @@ negative, not "investigate later", because the best revision is a known artifact
 This is where EVO's E9 lands: abandonment is a feature. A loop that cannot stop is not
 improving, it is spending.
 
+### The second curve: coverage churn
+
+The curve above plots the mean. There is a second curve, and it is a flow rather than a level:
+tasks gained and tasks lost, per revision.
+
+Plot both against revision alongside the mean. Three shapes tell you three different things.
+
+| Shape | What it means |
+| --- | --- |
+| Gained rises, lost stays near zero | The loop is adding capability |
+| Gained rises, lost rises with it | The loop is redistributing capability, and the mean hides it |
+| Gained flat, lost flat, mean flat | The loop has stopped, whatever the dashboard says |
+
+The middle shape is the one to watch for, because it looks like success. Beneath the Surface
+found turnover in all sixteen of its lineages, including the ones that improved on both
+reliability and coverage. A harness that gains twelve tasks and loses six has changed what it
+is good at, and the six have owners.
+
+Report the count, not just the delta. "Plus three coverage" can mean fifteen gained and twelve
+lost, which is a different product decision from three gained and none lost.
+
 ## Guardrails
 
-The three failure modes, their published evidence, and the mechanism that addresses them.
+The five failure modes, their published evidence, and the mechanism that addresses them.
 
 | Failure | Evidence | Guardrail |
 | --- | --- | --- |
@@ -1013,6 +1813,11 @@ The three failure modes, their published evidence, and the mechanism that addres
 | Search collapse | Branching paper: fixed dev set plateaus | Evolving subsets, pruning, branch guidance |
 | Visible-set overfit | Branching paper: Meta-Harness gains 3 points when selecting on test | Hidden holdout, dev-only selection |
 | Cost blowup | RHI citing Wang et al. 2026 | Search budget as a first-class metric |
+| Tax exceeds delivery | Tax paper: 109 to 393 percent for three of four methods | Improvement tokens counted separately, verification budgeted |
+| Gate accepts noise | TRUST: greedy FER0 of 45.59 percent | Sequential test, declared error budget, overlap correction |
+| Coverage churn | Audit: 16 of 16 lineages gain and lose tasks; plus 5.2 reliability while losing 10 tasks | Gained and lost reported separately, regression clause in the gate |
+| Verifier fitting | Criteria Exposure: gains vanish when the criteria change slightly | Paraphrase the criteria, hold out a second verifier |
+| Gain destroyed by the next update | Third Eye: selected utility falls 1.78 points on continuation | Evaluate after one further update, not only at selection |
 | Silent regression | Harness study: compression loses 4 to 5 points | Paired regression suite on every revision |
 | Unbounded context | InfraRSI: 28k character summarization of old trials | Summarize old trials, keep full traces for recent |
 | Bad revision with no way back | RHI lacks elitism in its pseudocode | Versioned harness, one-command rollback |
@@ -1040,7 +1845,12 @@ Specific failure modes of the RSI loop, with the mechanism that catches them.
 | The loop specializes too hard | Great on one task family, worse on others | Branch or route, as in the branching paper |
 | The loop inherits stale priors | New model, old scaffolding, no gain | Re-run the component ablation at every model change |
 | The loop cannot explain itself | A revision nobody can justify | Mandatory rationale and estimate per revision |
-| The loop costs more than it saves | Search spend exceeds delivery spend | Budget ratio, stop rule |
+| The loop costs more than it saves | Search spend exceeds delivery spend | Budget ratio, stop rule, tax meter |
+| The loop looks free | Nobody ever measured the improvement tokens | Count verify, explore and write separately |
+| The gate is a coin flip | Accept rate near random when candidates are shuffled | Replay the archive, inject known-bad candidates |
+| The loop buys its own score | Every task gained costs one lost, mean unchanged | Gained and lost ledger, regression clause |
+| The gain evaporates next revision | The candidate was good once, and worse after one more update | Third Eye continuation check before promotion |
+| The loop learned the verifier | Scores collapse when the criteria are paraphrased | Second held-out verifier, criteria paraphrase test |
 | The loop is unreviewable | A 900-line prompt diff | Component granularity, one change per revision |
 
 The oscillation entry deserves a note. RHI's pairwise-against-predecessor design has no
@@ -1088,35 +1898,54 @@ Exit: ten proposed revisions, at least six of which a human reviewer calls plaus
 Accept on holdout delta plus cost plus invariants. Keep the incumbent on rejection. One
 command rolls back.
 
-Exit: a deliberately bad revision is rejected, and the rollback is exercised for real.
+Exit: a deliberately bad revision is rejected, the rollback is exercised for real, and the
+threshold has been replayed against at least twenty archived candidates so you know its
+empirical error rate.
 
-**Stage 6: the experience store.**
+**Stage 6: the tax meter and the ledger.**
+
+Count improvement tokens separately from task tokens, split into verify, explore and write.
+Track gained, lost and unchanged tasks per revision, with the deployment cost of each.
+
+Exit: one report shows tax rate, unused share and task turnover for the last five revisions,
+and reading it changes at least one decision. If it changes nothing, the meter is decoration.
+
+**Stage 7: the statistical gate.**
+
+Replace the point-estimate threshold with a sequential test, a declared tolerance and a
+declared error budget. Correct for validation reuse.
+
+Exit: replaying the archive gives a measured false accept rate below the declared budget, at
+an acceptance rate that is not near zero. Both numbers, or the stage is not done.
+
+**Stage 8: adversarial hardening.**
+
+Run the attack table from the simulation section against the real loop, including the gate
+itself and the known-bad candidate injection.
+
+Exit: every attack is caught, and the catch is logged.
+
+**Stage 9: the experience store.**
 
 Structured records: environment, observation, effect. Model version, task class, component,
 outcome.
 
 Exit: a new campaign warm-starts from the store and reaches its previous best faster.
 
-**Stage 7: branching, if the single trajectory plateaus.**
+**Stage 10: branching, if the single trajectory plateaus.**
 
 Two branches, evolving subsets, coverage voting, branch-local guidance. Only after stage 5
 proves the gate works, because branching multiplies whatever the gate does wrong.
 
 Exit: routed holdout beats the better single head.
 
-**Stage 8: the router.**
+**Stage 11: the router.**
 
 Fit on head-exclusive development cases. Evaluate on fresh exclusive cases.
 
 Exit: routing beats the best head on at least two of three task families, or drop the router.
 
-**Stage 9: adversarial hardening.**
-
-Run the attack table from the simulation section against the real loop.
-
-Exit: every attack is caught, and the catch is logged.
-
-**Stage 10: scheduled re-evaluation.**
+**Stage 12: scheduled re-evaluation.**
 
 Every model upgrade triggers a component ablation. Components that no longer pay are deleted.
 
@@ -1124,6 +1953,11 @@ Exit: a written record of what was removed and why, per model generation.
 
 The ordering is the EVO ordering: value first, cost second, complexity last. Most teams
 invert it, build the branching router, and discover they cannot tell whether any of it helped.
+
+Two of the stages are new, and both exist because of the audits. Stage 6 is cheap and it is
+the only one that can tell you to stop. Stage 7 is a day of work and it is the difference
+between a gate and a coin flip. Neither requires a better model, a bigger cluster or a new
+benchmark, which is why skipping them is hard to defend.
 
 ## What does not transfer
 
@@ -1137,7 +1971,7 @@ cost per task. The paper's framing is continual specialization, not one universa
 generations, which is encouraging. But the mechanism is context management, and context
 management is exactly what providers keep improving for free. Re-test, do not assume.
 
-**The judge is the soft spot.** Two of the three papers rely on LLM judgment for the signal.
+**The judge is the soft spot.** Several of these papers rely on LLM judgment for the signal.
 Positivity bias, prompt sensitivity, and model-version drift all leak into the objective.
 Deterministic verifiers are better wherever the task allows them.
 
@@ -1149,7 +1983,28 @@ tests and undocumented invariants.
 clearest demonstration that a learned prior can be actively wrong on new hardware.
 
 **The search cost is easy to hide.** The branching paper admits unequal token budgets. RHI's
-cited finding is that search cost can erase the gains entirely. Count it.
+cited finding is that search cost can erase the gains entirely. The tax paper measures it at
+109 to 393 percent for three of four methods. Count it.
+
+**The tax rate depends on the horizon.** A campaign that improves a harness once and then
+serves ten thousand tasks has a tiny tax. A loop that updates every four tasks has a huge one.
+The published numbers are from the second regime. If your deployment looks like the first,
+you are allowed to be less worried about the tax, and you are not allowed to skip measuring it.
+
+**A mutator can pass the gate and still not be worth it.** TRUST's guarantees are about the
+proportion of accepted updates that were bad. They say nothing about the size of the good ones,
+the cost of finding them, or whether the final harness is good in absolute terms. A safe loop
+can be a slow loop.
+
+**The gate needs validation data you may not have.** 200 examples and 30 rounds is already
+more than most teams have. With 40 validation cases, the sequential test will be correct and
+will accept almost nothing, which is the SGM-B outcome. Plan for the statistical power
+problem before you plan for the loop.
+
+**Gains are not durable by default.** Third Eye's result is the sharpest version: immediate
+selected utility near zero, and a further update reduces it by 1.78 points. Beneath the
+Surface shows the same thing structurally, with every lineage losing tasks. A gain that only
+exists at selection time is not a gain.
 
 **The recursion is shallow.** Nobody in these papers improves the improver. The mutator is a
 fixed model with a fixed prompt. A true second-order loop, where the optimizer improves the
@@ -1159,7 +2014,9 @@ crosses that line.
 
 **Dev and test overlap flatters everyone.** Meta-Harness gains 3 points on math if you let
 test outcomes select among candidates. Any paper reporting search-set performance as a
-headline is reporting an optimistic number, and the branching authors say so.
+headline is reporting an optimistic number, and the branching authors say so. Criteria
+Exposure is the same disease in a different organ: the agent optimizes the checker rather
+than the task.
 
 ## Worked example: one week of harness RSI
 
@@ -1189,7 +2046,9 @@ One revision, one component. Cost: 3.10 USD of search, 22 judgments.
 | Hidden | 41 | 44 | +3 |
 
 Accepted. Visible gain 5, hidden gain 3, so roughly 40 percent of the visible improvement was
-fitting. Cost rose 9 percent, inside the ceiling. Review minutes unchanged.
+fitting. Cost rose 9 percent, inside the ceiling. Review minutes unchanged. Tax for the
+revision: 0.42M improvement tokens against 3.6M task tokens, so 12 percent, and the unused
+share is zero because the only artifact the revision produced is the harness itself.
 
 **Thursday: the second revision, and a rejection.**
 
@@ -1201,6 +2060,11 @@ stays.
 This is the most valuable day of the week, and it produced no improvement. It prevented a
 plausible-looking cost optimization from erasing the first gain, and it cost 2.40 USD.
 
+They also replay both revisions through the gate they plan to adopt next month, a sequential
+test with an error budget of 0.10 and a tolerance of 0.02. The first revision passes. The
+second fails on the holdout. Two observations is not a measured error rate, and it is the
+start of one.
+
 **Friday: stop, and write it down.**
 
 Two revisions, one accepted, one rejected. The holdout moved 3 points. The decision log
@@ -1208,8 +2072,13 @@ records both estimates against both results. The next hypothesis, chosen because
 moved rather than because it is interesting, is about specification quality rather than
 another harness component.
 
+The ledger for the week: three tasks gained, none lost, fourteen unchanged on the visible
+split. Two gained, none lost, five unchanged on the hidden split. That is a clean trade, which
+is unusual, and they know it is clean only because they counted.
+
 **What a week bought:** +3 points of real holdout improvement, one prevented regression, two
-calibration data points, and a stop decision made on evidence rather than fatigue.
+calibration data points, a first reading on the gate, and a stop decision made on evidence
+rather than fatigue.
 
 **What it did not buy:** a self-improving system. That takes a quarter. The week bought a
 working *instrument*, which is the thing you actually need first.
@@ -1233,6 +2102,20 @@ working *instrument*, which is the thing you actually need first.
 8. Does a routed portfolio of specialized harnesses beat one well-tuned general harness at
    equal total cost? The branching paper suggests yes on complementary benchmarks, but the
    token budgets were unequal.
+9. What is the right tax denominator? The published numbers come from streams that update
+   every four tasks. A harness improved once and served for months has a different ratio, and
+   nobody has measured the crossover.
+10. Can the gate's false accept rate be estimated without a large holdout, by replaying an
+    archive of candidates whose true deltas are known from production? That would make TRUST
+    affordable for teams with forty validation cases.
+11. Does the statistical gate survive a proposer that cannot produce real improvements? TRUST
+    assumes the proposer eventually finds one. A weak proposer plus a correct gate is a loop
+    that accepts nothing.
+12. Is coverage churn a property of harness evolution, or of eight-pass evaluation on small
+    benchmarks? The ledger has not been run on a large production suite.
+13. Do the three audits interact? A cheaper loop buys more revisions, more revisions need a
+    tighter gate, and a tighter gate on the same data accepts less. The composition of the
+    three constraints is unstudied.
 
 ## Checklist
 
@@ -1243,10 +2126,19 @@ working *instrument*, which is the thing you actually need first.
 - [ ] A hidden holdout exists, and it is reported once per harness version.
 - [ ] One component changes per revision, with a written rationale and estimate.
 - [ ] Revisions are paired comparisons on the same scenarios and model snapshot.
-- [ ] The gate has quality, cost, invariant and holdout clauses.
+- [ ] The gate has invariants, regressions, holdout, cost and gate-test clauses.
+- [ ] The gate has a declared tolerance and a declared error budget.
+- [ ] The gate's false accept rate has been measured by replaying archived candidates.
+- [ ] Known-bad candidates have been injected, and they were rejected.
 - [ ] The incumbent is kept on rejection, and rollback is one command.
+- [ ] Improvement tokens are counted separately from task tokens, per revision.
+- [ ] Verification cost has been budgeted, not just task cost.
+- [ ] The unused share of the tax has been measured at least once.
+- [ ] Gained, lost and unchanged tasks are reported per revision.
+- [ ] A continuation check runs before promotion: is the candidate still good after one more
+      update?
 - [ ] Search cost is measured in dollars, not just in tokens.
-- [ ] Search spend is under 20 percent of delivery spend, or there is a reason.
+- [ ] Tax is under 20 percent of delivery spend, or there is a reason and a horizon.
 - [ ] The visible and hidden curves are plotted together.
 - [ ] There is a stop rule, and it has been used at least once.
 - [ ] The failure taxonomy is reported per iteration, not just the score.
@@ -1257,7 +2149,7 @@ working *instrument*, which is the thing you actually need first.
 
 ## References
 
-The three papers this page is built on:
+The six papers this page is built on:
 
 - Hyunin Lee, Jinglue Xu, Jeffrey Seely, Donghyun Lee, Matei Zaharia, Yujin Tang,
   "Recursive Harness Self-Improvement", arXiv 2607.15524, July 2026. Harness as prompt,
@@ -1274,6 +2166,21 @@ The three papers this page is built on:
   Training Infrastructure", arXiv 2611.11558, November 2026. Five-stage workflow, fixed task
   contract, budgeted compositional search, cross-hardware experience bank.
   https://arxiv.org/abs/2611.11558
+- Yitong Zhang, Ang Li, Yisen Wang, "The RSI Tax: When Recursive Self-Improvement Is Not Worth
+  the Cost", arXiv 2611.13524, November 2026. Token cost of self-improvement on continual task
+  streams, the verify-explore-write decomposition, subsequent-use attribution, and a bounded
+  note baseline.
+  https://arxiv.org/abs/2611.13524
+- Zihe Gao, Zhengling Qi, Yifan Cui, "Trustworthy Recursive Self-Improvement with Statistical
+  Guarantees", arXiv 2611.10787, November 2026. False evolution rate, e-value testing with
+  overlap correction, error budget allocation, and an LLM-assisted spending policy.
+  https://arxiv.org/abs/2611.10787
+- Xiaobo Wang, Zimu Wang, Siyu Ye, Jiaqi Li, Min Tang, Jun Bai, Yuling Shi, Ruobing Wang,
+  Jingjing Zhang, Chaofan Wang, Kai Wu, Mengnan Qi, Kai Cai, Xiaodong Gu, Qi Liu,
+  Zilong Zheng, "Beneath the Surface: What We Overlook When We Talk About Agent Evolution",
+  arXiv 2611.07624, November 2026. Sixteen lineages, reliability versus coverage, task
+  turnover, deployment cost, operator interventions, and AGE.
+  https://arxiv.org/abs/2611.07624
 
 The measurement base:
 
@@ -1281,6 +2188,32 @@ The measurement base:
   Agents", arXiv 2609.32459, September 2026. Harness gap of 19.4 points, model gap of 22.8,
   NanoHarness component ablations.
   https://arxiv.org/html/2609.32459v1
+
+The rest of the wave, cited by arXiv ID in the landscape table:
+
+- Wenbo Huang et al., "Learning the Task or Learning the Verifier? Rethinking Criteria
+  Exposure in Embodied Self-Improvement", arXiv 2611.08318.
+- Arkid Mitra et al., "Agent Self-Improvement with Frozen Weights: The Added Value and Limits
+  of Failure Traces", arXiv 2611.11342.
+- Sujato Dutta et al., "Third Eye: Beyond Immediate Gains in Recursive Self-Improvement",
+  arXiv 2611.12988.
+- Jingdong Zhang et al., "Flex-RSI: Benchmarking Recursive Self-Improvement of Frontier
+  Agents", arXiv 2611.08946.
+- Bangrui Xu et al., "SelfImprove-Bench: Evaluating Generalization in Self-Improving Agents",
+  arXiv 2611.02797.
+- Wanying Qu et al., "RSI-Env: An Open-Ended Environment for Recursive Self-Improvement of
+  Agents", arXiv 2611.01736.
+- Yuhao Tan et al., "BOXBOX: Recursive Harness Self-Improvement for Long-Running Performance
+  Optimization", arXiv 2611.09218.
+- Xudong Wu et al., "JoMoHa: Joint Model-Harness Optimization with Reinforcement Learning",
+  arXiv 2611.11499.
+- Yitong Lin et al., "Verify by Doing: Co-Evolving Agent Execution and Evaluation without
+  External Feedback", arXiv 2611.15276.
+- Doyoung Kim et al., "Experience-Handoff Reinforcement Learning for Recursive
+  Self-Improvement", arXiv 2611.16409.
+- Yang Zhou et al., "Singularity-Bench: Can Agents Build Agents?", arXiv 2611.16591.
+- Binghang Lu et al., "RSI-PDEbench: A Benchmark for Self-Improving Agents in PDE Solving",
+  arXiv 2611.14949.
 
 Methods cited by those papers:
 
