@@ -65,6 +65,18 @@ package, installed editable from `src/`.
 pixi run default   # create the local dirs and print the paths
 pixi run test      # run the test suite
 pixi run bench     # report the corpus inventory and the Tau version
+pixi run control   # gold must pass and null must fail, for every task
+```
+
+The bench runs the agent on the host, because it needs network access to the model provider,
+and routes only tool execution into bubblewrap: read-only runtime, the locked pixi
+environment mounted read-only, the workspace read-write, an empty `HOME`, and no network.
+`read`, `write` and `edit` refuse any path outside the workspace, and `.env` files inside
+the workspace are masked.
+
+```sh
+python -m evo_bench run --provider fake --limit 3
+python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
 ```
 
 `TMPDIR` points at `/tmp`, because pixi writes its own temp files before activation
@@ -85,8 +97,11 @@ committed. `.env.example` holds empty placeholders.
 - [x] Benchmarking and evaluation guide
 - [x] pixi `default` task that creates the temp and scratch dirs
 - [x] Bench scaffold: task cards, ledger, statistics, sandbox wrapper
-- [ ] Task corpus with 20 real tasks and gold and null controls
-- [ ] Paired A/B runner with a promotion gate
+- [x] Seven-task corpus with gold and null controls
+- [x] Sandboxed tool layer with path containment
+- [x] Paired comparison with an exact McNemar test
+- [ ] Task corpus with 20 real tasks from commits and incidents
+- [ ] Promotion gate wired to the ledger
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
 
