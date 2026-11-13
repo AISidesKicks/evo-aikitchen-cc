@@ -706,3 +706,5 @@ Method:
 - [Simulating the EVO process for harness development](evo-simulation.md)
 - [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) for the loop
   that improves the harness, and the guardrails it needs.
+- [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
+  for the tool choice itself: thirteen layers, Tau, JAZ, and the rest of the Python field.

@@ -643,3 +643,5 @@ Next in the series:
   measure the harness without fooling yourself.
 - [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) closes the
   loop: the harness that improves the harness, and the guardrails that keep it honest.
+- [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
+  picks the tool you build on, and argues that skills and hooks are two of thirteen layers.

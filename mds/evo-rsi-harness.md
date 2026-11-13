@@ -2232,6 +2232,9 @@ Harness design and measurement:
   itself, including the component portfolio and the build order.
 - [Simulating the EVO process for harness development](evo-simulation.md) for scenario
   corpora, run variance, ablation design, fault injection and multi-session shifts.
+- [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
+  for the harness you improve, and the case for splitting the operator shell from the
+  experiment bench.
 - [EVO in the AI harness era](evo-in-ai-era.md) for the evidence base and the E1 to E10
   mapping.
 - [EVO in software development](evo-sw-devel.md) for the method itself.

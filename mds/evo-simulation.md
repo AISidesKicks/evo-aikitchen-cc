@@ -720,3 +720,5 @@ Method:
 - [Building a custom AI harness with EVO principles](evo-in-ai-harness.md)
 - [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) for the next
   layer: a harness that revises itself under a frozen evaluator.
+- [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
+  for the harness you simulate against, including its thirteen layers.
