@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 from evo_bench.pricing import (
+    estimate,
+    format_estimate,
+    observe_tokens,
     Price,
     PriceBook,
     fetch_openrouter_prices,
@@ -127,3 +130,39 @@ def test_write_trace_creates_one_line_per_message(tmp_path):
     assert path.name == "t1-abc123.jsonl"
     assert len(lines) == 2
     assert json.loads(lines[0])["role"] == "user"
+
+
+def test_observe_tokens_averages_the_matching_model():
+    rows = [
+        {"model": "m", "tokens_in": 100, "tokens_out": 10},
+        {"model": "m", "tokens_in": 300, "tokens_out": 30},
+        {"model": "other", "tokens_in": 9_999, "tokens_out": 999},
+    ]
+    assert observe_tokens(rows, "m") == (200, 20)
+
+
+def test_observe_tokens_returns_none_without_history():
+    assert observe_tokens([{"model": "other", "tokens_in": 1}], "m") is None
+
+
+def test_estimate_multiplies_tokens_across_runs():
+    book = PriceBook(prices={"m": Price(input=1.0, output=2.0)})
+    item = estimate(book, "m", runs=10, tokens_in=1_000, tokens_out=1_000, source="test")
+
+    # 10 runs * (1000 in * $1/M + 1000 out * $2/M) = 10 * 0.003
+    assert item.cost == pytest.approx(0.03)
+    assert item.runs == 10
+
+
+def test_format_estimate_suggests_a_cap():
+    book = PriceBook(prices={"m": Price(input=1.0, output=1.0)})
+    item = estimate(book, "m", runs=1, tokens_in=1_000_000, tokens_out=0, source="test")
+    text = format_estimate(item)
+
+    assert "suggested cap" in text
+    assert "$1.50" in text
+
+
+def test_format_estimate_says_when_the_model_has_no_price():
+    item = estimate(PriceBook(), "unknown", runs=1, tokens_in=1, tokens_out=1, source="test")
+    assert "no price" in format_estimate(item)

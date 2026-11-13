@@ -26,7 +26,14 @@ from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
 from evo_bench.mining import mine
 from evo_bench.planning import report as plan_report, resolution, tasks_for
-from evo_bench.pricing import fetch_openrouter_prices, load_prices, write_prices
+from evo_bench.pricing import (
+    estimate as build_estimate,
+    fetch_openrouter_prices,
+    format_estimate,
+    load_prices,
+    observe_tokens,
+    write_prices,
+)
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.report import write_report
 from evo_bench.runner import run_task, write_trace
@@ -285,6 +292,52 @@ def _prices(out: Path, *, refresh: bool, model: str | None) -> int:
     return 0
 
 
+def _estimate(
+    root: Path,
+    *,
+    tasks: list[Task],
+    candidates: int,
+    trials: int,
+    model: str,
+    prices: Path,
+    ledger: Path | None,
+) -> int:
+    """Estimate a campaign's cost before any money is spent."""
+    book = load_prices(root / prices)
+    runs = len(tasks) * (candidates + 1) * trials
+
+    rows = []
+    if ledger is not None and (root / ledger).exists():
+        rows = list(read_ledger(root / ledger))
+
+    # Infer the model rather than demanding an environment variable: a ledger
+    # already says which model it ran, and a single-entry price book is
+    # unambiguous.
+    if not model or model == "unknown":
+        if rows:
+            model = str(rows[-1].get("model") or "")
+        elif len(book.prices) == 1:
+            model = next(iter(book.prices))
+    if not model:
+        print("no model given and none inferable: pass --model")
+        return 2
+
+    observed = observe_tokens(rows, model) if rows else None
+
+    if observed is None:
+        tokens_in, tokens_out, source = 15_000, 3_000, "assumed"
+    else:
+        tokens_in, tokens_out = observed
+        source = f"observed in {ledger}"
+
+    item = build_estimate(
+        book, model, runs=runs, tokens_in=tokens_in, tokens_out=tokens_out, source=source
+    )
+    print(f"tasks        {len(tasks)} ({candidates + 1} variants x {trials} trials)")
+    print(format_estimate(item))
+    return 0
+
+
 def _secrets(root: Path) -> int:
     report = check_secrets(root)
     if report.secrets == 0:
@@ -502,6 +555,15 @@ def main(argv: list[str] | None = None) -> int:
     plan_cmd.add_argument("--discordant", type=float, default=0.1)
     plan_cmd.add_argument("--effect", type=float, default=None, help="also size the corpus")
 
+    estimate_cmd = sub.add_parser("estimate", help="cost a campaign before running it")
+    estimate_cmd.add_argument("--tasks", type=Path, default=None)
+    estimate_cmd.add_argument("--split", default=None, choices=["train", "holdout", "all"])
+    estimate_cmd.add_argument("--candidates", type=int, default=1)
+    estimate_cmd.add_argument("--trials", type=int, default=1)
+    estimate_cmd.add_argument("--model", default=os.environ.get("EVO_MODEL", ""))
+    estimate_cmd.add_argument("--prices", type=Path, default=Path(DEFAULT_PRICES))
+    estimate_cmd.add_argument("--ledger", type=Path, default=None)
+
     mine_cmd = sub.add_parser("mine", help="turn a repository's history into bench tasks")
     mine_cmd.add_argument("--repo", type=Path, required=True)
     mine_cmd.add_argument("--out", type=Path, default=Path("benchmarks/mined"))
@@ -581,6 +643,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"to resolve {args.effect:.0%}: {needed['independent']} tasks independent, "
                   f"{needed['paired']} paired")
         return 0
+    if args.command == "estimate":
+        return _estimate(
+            root,
+            tasks=_load(root, args.tasks, args.split),
+            candidates=args.candidates,
+            trials=args.trials,
+            model=args.model or "unknown",
+            prices=args.prices,
+            ledger=args.ledger,
+        )
     if args.command == "mine":
         mined = mine(
             args.repo,

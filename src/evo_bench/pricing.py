@@ -156,3 +156,66 @@ def write_prices(path: str | Path, book: PriceBook) -> Path:
 def costs_from_rows(rows: list[Mapping[str, object]]) -> bool:
     """Whether any row carries a non-zero cost."""
     return any(float(row.get("cost") or 0.0) > 0 for row in rows)
+
+
+@dataclass(frozen=True, slots=True)
+class Estimate:
+    """A campaign cost estimate, with the source of its token assumptions."""
+
+    model: str
+    runs: int
+    tokens_in: int
+    tokens_out: int
+    cost: float
+    source: str
+
+
+def observe_tokens(rows: list[Mapping[str, object]], model: str) -> tuple[int, int] | None:
+    """Average input and output tokens per run for one model, from a ledger."""
+    matching = [
+        row
+        for row in rows
+        if str(row.get("model") or "") == model
+        and (row.get("tokens_in") or row.get("tokens_out"))
+    ]
+    if not matching:
+        return None
+    total_in = sum(int(row.get("tokens_in") or 0) for row in matching)
+    total_out = sum(int(row.get("tokens_out") or 0) for row in matching)
+    return round(total_in / len(matching)), round(total_out / len(matching))
+
+
+def estimate(
+    book: PriceBook,
+    model: str,
+    *,
+    runs: int,
+    tokens_in: int,
+    tokens_out: int,
+    source: str,
+) -> Estimate:
+    """Cost of ``runs`` runs at the given token counts."""
+    price = book.price_for(model)
+    cost = book.cost(model, input_tokens=tokens_in * runs, output_tokens=tokens_out * runs)
+    return Estimate(
+        model=model,
+        runs=runs,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        cost=float(cost or 0.0),
+        source=source,
+    )
+
+
+def format_estimate(item: Estimate) -> str:
+    lines = [
+        f"model        {item.model}",
+        f"runs         {item.runs}",
+        f"tokens/run   {item.tokens_in} in, {item.tokens_out} out ({item.source})",
+        f"cost         ${item.cost:.4f}",
+    ]
+    if item.cost:
+        lines.append(f"suggested cap ${item.cost * 1.5:.2f} (1.5x headroom for retries)")
+    else:
+        lines.append("no price for this model: refresh the price book")
+    return "\n".join(lines)
