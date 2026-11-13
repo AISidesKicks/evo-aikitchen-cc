@@ -296,6 +296,11 @@ The arithmetic above is mine, computed from the standard formulas. The formulas 
 controversial. The behaviour they imply is: state the smallest difference your bench can
 resolve, and refuse to claim anything smaller.
 
+The table uses the normal approximation so the standard error column stays readable. The
+code in `src/evo_bench/stats.py` reports Wilson intervals instead, which are slightly
+narrower at small n and never leave the 0 to 1 range. Same decision rule, slightly
+tighter numbers.
+
 **The resolution rule.** Before you run a comparison, write down the smallest effect you
 care about and the number of tasks you have. If the second cannot resolve the first, you
 have three options: get more tasks, use a paired design, or accept that the decision will
