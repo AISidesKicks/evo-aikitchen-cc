@@ -78,12 +78,19 @@ the workspace are masked.
 python -m evo_bench run --provider fake --limit 3
 python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
 python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
+python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
 ```
 
 The gate is the decision rule from the docs made executable. It refuses to promote on fewer
 than 20 paired tasks, demands a significant paired difference, caps the cost increase at 20
 percent, and rejects any regression on the holdout split. `--cache runs/cache.jsonl` stores
 model responses by request hash, so a campaign can be replayed without paying twice.
+
+A `cycle` runs the baseline variant and every candidate over the corpus, gates each one, and
+writes `runs/cycle-summary.md`. Variants live in `benchmarks/variants/<name>/`, with an
+optional `variant.toml` (model, turn budget, tool allow list) and `system.md` (instructions
+appended to the base prompt). The directory name is the variant's identity. `--max-usd` stops
+the cycle between runs, so the cap is a budget rather than a report.
 
 `TMPDIR` points at `/tmp`, because pixi writes its own temp files before activation
 scripts run, so `TMPDIR` can never point at a directory pixi has to create. `EVO_TMP` is
@@ -108,6 +115,7 @@ committed. `.env.example` holds empty placeholders.
 - [x] Paired comparison with an exact McNemar test
 - [x] Promotion gate with a fixed policy
 - [x] Response cache for cheap replay
+- [x] Variants, cycles and a budget-capped search loop
 - [ ] Task corpus with 20 real tasks from commits and incidents
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset

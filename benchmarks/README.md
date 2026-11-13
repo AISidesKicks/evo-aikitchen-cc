@@ -57,6 +57,7 @@ benchmarks/
   tasks.example.jsonl  schema example
   fixtures/calc/       the starting code for the calc tasks
   gold/<task-id>/      the reference solution, copied over the workspace
+  variants/<name>/     candidate configurations: variant.toml and system.md
 ```
 
 A task names its starting code with `fixture` and its reference solution with
@@ -68,6 +69,36 @@ commits.
 The `calc` fixture is a toy on purpose: it makes the controls cheap to run and
 the failure modes obvious. Real tasks should come from commits and incidents in
 this repository or the repositories you actually ship.
+
+## Variants and cycles
+
+A variant is a candidate configuration: prompt text, model, turn budget, tool
+allow list. It lives in `benchmarks/variants/<name>/`:
+
+```
+variants/strict/
+  variant.toml    max_turns, model, tools, notes
+  system.md       text appended to the base system prompt
+```
+
+The directory name is the variant's identity, so there is only one source of
+truth. A variant with no files is an exact copy of the baseline, which is a
+useful control.
+
+A cycle runs the baseline and every candidate over the corpus and gates each
+candidate against the baseline:
+
+```sh
+python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
+```
+
+It writes `runs/cycle.jsonl` and a readable `runs/cycle-summary.md` with one gate
+report per candidate. `--max-usd` stops the cycle between runs, so the cap is a
+budget rather than a report.
+
+The cycle does not invent variants. Someone, or something, writes a variant
+directory; the cycle measures it fairly. That is the honest division of labour
+until a generator exists, and it keeps every candidate reviewable as a diff.
 
 ## Commands
 
