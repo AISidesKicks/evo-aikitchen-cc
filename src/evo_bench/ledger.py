@@ -30,6 +30,7 @@ FIELDS = (
     "task_id",
     "task_class",
     "split",
+    "variant",
     "harness",
     "harness_version",
     "model",

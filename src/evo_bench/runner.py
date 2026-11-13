@@ -26,6 +26,7 @@ from evo_bench.grader import Grade, grade
 from evo_bench.ledger import make_row
 from evo_bench.tasks import Task
 from evo_bench.tools import workspace_tools
+from evo_bench.variants import Variant, compose_system, select_tools
 from evo_bench.workspace import Workspace, apply_gold, changed_files, prepare
 
 SYSTEM_PROMPT = """You are working in a small repository at /work.
@@ -73,6 +74,8 @@ async def run_task(
     timeout: float = 300.0,
     max_turns: int | None = None,
     base: str | Path | None = None,
+    variant: Variant | None = None,
+    variant_name: str = "baseline",
 ) -> RunResult:
     """Run one task and grade it."""
     if mode not in {"agent", "gold", "null"}:
@@ -103,12 +106,18 @@ async def run_task(
         apply_gold(workspace, resolve(task.gold))
     elif mode == "agent":
         assert provider is not None
+        system = compose_system(SYSTEM_PROMPT, variant) if variant else SYSTEM_PROMPT
+        tools = workspace_tools(workspace.root)
+        if variant is not None:
+            tools = select_tools(variant, tools)
         config = AgentHarnessConfig(
             provider=provider,
-            model=model,
-            system=SYSTEM_PROMPT,
-            tools=workspace_tools(workspace.root),
-            max_turns=max_turns or task.budget_turns,
+            model=variant.model if variant and variant.model else model,
+            system=system,
+            tools=tools,
+            max_turns=(variant.max_turns if variant and variant.max_turns else None)
+            or max_turns
+            or task.budget_turns,
         )
         agent = AgentHarness(config)
         async for event in agent.prompt(task.prompt):
@@ -130,6 +139,7 @@ async def run_task(
         task_id=task.id,
         task_class=task.task_class,
         split=task.split,
+        variant=variant_name,
         harness=harness,
         harness_version=harness_version,
         model=model,

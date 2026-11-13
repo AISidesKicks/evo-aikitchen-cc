@@ -21,15 +21,18 @@ from pathlib import Path
 from evo_bench import __version__
 from evo_bench.cache import CachingProvider, ResponseCache
 from evo_bench.compare import compare, report
+from evo_bench.cycle import run_cycle, write_summary
 from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.runner import run_task
 from evo_bench.tasks import Task, class_counts, load_tasks
+from evo_bench.variants import Variant, load_variants
 
 DEFAULT_TASKS = "benchmarks/tasks.jsonl"
 EXAMPLE_TASKS = "benchmarks/tasks.example.jsonl"
 DEFAULT_LEDGER = "runs/ledger.jsonl"
+DEFAULT_VARIANTS = "benchmarks/variants"
 DEFAULT_POLICY = Policy()
 
 
@@ -124,13 +127,19 @@ async def _run(
     timeout: float,
     limit: int | None,
     cache: Path | None = None,
+    variant: Variant | None = None,
+    max_usd: float | None = None,
 ) -> int:
     provider = build_provider(provider_name)
     if cache is not None:
         provider = CachingProvider(provider, ResponseCache(cache))
     selected = tasks[:limit] if limit else tasks
     passed = 0
+    spend = 0.0
     for task in selected:
+        if max_usd is not None and spend >= max_usd:
+            print(f"stopped: spend {spend:.2f} reached the cap {max_usd:.2f}")
+            break
         result = await run_task(
             task,
             mode="agent",
@@ -139,8 +148,11 @@ async def _run(
             workdir=_workdir(),
             base=root,
             timeout=timeout,
+            variant=variant,
+            variant_name=variant.name if variant else "baseline",
         )
         append(ledger, result.row)
+        spend += float(result.row.get("cost") or 0.0)
         passed += int(result.passed)
         print(
             f"{task.id:<26} {'pass' if result.passed else 'fail':<5} "
@@ -148,7 +160,7 @@ async def _run(
         )
         if not result.passed:
             print(f"  {result.grade.output.strip()[-300:]}")
-    print(f"\n{passed}/{len(selected)} passed, ledger {ledger}")
+    print(f"\n{passed}/{len(selected)} passed, spend ${spend:.4f}, ledger {ledger}")
     return 0
 
 
@@ -177,6 +189,60 @@ def _gate(
     return 0 if decision.promoted else 1
 
 
+async def _cycle(
+    root: Path,
+    tasks: list[Task],
+    *,
+    variants_dir: Path,
+    baseline_name: str,
+    candidate_names: list[str],
+    provider_name: str,
+    model: str,
+    ledger: Path,
+    summary_path: Path,
+    policy: Policy,
+    max_usd: float | None,
+    timeout: float,
+    cache: Path | None,
+) -> int:
+    variants = load_variants(root / variants_dir)
+    if baseline_name not in variants:
+        raise SystemExit(
+            f"no baseline variant {baseline_name!r} in {variants_dir} "
+            f"(found: {', '.join(sorted(variants)) or 'none'})"
+        )
+    missing = [name for name in candidate_names if name not in variants]
+    if missing:
+        raise SystemExit(f"unknown candidates: {', '.join(missing)}")
+
+    provider = build_provider(provider_name)
+    if cache is not None:
+        provider = CachingProvider(provider, ResponseCache(cache))
+
+    result = await run_cycle(
+        tasks,
+        baseline=variants[baseline_name],
+        candidates=[variants[name] for name in candidate_names],
+        provider=provider,
+        model=model,
+        ledger=root / ledger,
+        workdir_for=_workdir,
+        policy=policy,
+        max_usd=max_usd,
+        timeout=timeout,
+        base=root,
+    )
+
+    path = write_summary(result, root / summary_path, baseline=baseline_name)
+    print(f"cycle {result.cycle_id}: {len(result.rows)} runs, spend ${result.spend:.4f}")
+    if result.aborted:
+        print(f"aborted: {result.aborted_reason}")
+    for name, decision in result.decisions.items():
+        print(f"  {name:<20} {decision.verdict}")
+    print(f"summary {path}")
+    return 0 if any(d.promoted for d in result.decisions.values()) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="evo_bench", description=__doc__)
     parser.add_argument(
@@ -203,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="response cache file, so a campaign can be replayed without paying twice",
     )
+    run.add_argument("--variant", default=None, help="variant name from benchmarks/variants")
+    run.add_argument("--max-usd", type=float, default=None, help="stop before exceeding this spend")
 
     compare_cmd = sub.add_parser("compare", help="paired comparison of two ledgers")
     compare_cmd.add_argument("first", type=Path)
@@ -223,6 +291,24 @@ def main(argv: list[str] | None = None) -> int:
         "--no-holdout", action="store_true", help="ignore the holdout split"
     )
 
+    cycle_cmd = sub.add_parser("cycle", help="run a baseline and candidates, then gate each")
+    cycle_cmd.add_argument("--variants-dir", type=Path, default=Path(DEFAULT_VARIANTS))
+    cycle_cmd.add_argument("--baseline", default="baseline")
+    cycle_cmd.add_argument("--candidates", required=True, help="comma separated variant names")
+    cycle_cmd.add_argument("--provider", default="fake")
+    cycle_cmd.add_argument("--model", default=os.environ.get("EVO_MODEL", "fake"))
+    cycle_cmd.add_argument("--ledger", type=Path, default=Path("runs/cycle.jsonl"))
+    cycle_cmd.add_argument("--summary", type=Path, default=Path("runs/cycle-summary.md"))
+    cycle_cmd.add_argument("--max-usd", type=float, default=None)
+    cycle_cmd.add_argument("--timeout", type=float, default=300.0)
+    cycle_cmd.add_argument("--cache", type=Path, default=None)
+    cycle_cmd.add_argument("--alpha", type=float, default=DEFAULT_POLICY.alpha)
+    cycle_cmd.add_argument("--min-tasks", type=int, default=DEFAULT_POLICY.min_tasks)
+    cycle_cmd.add_argument("--min-effect", type=float, default=DEFAULT_POLICY.min_effect)
+    cycle_cmd.add_argument(
+        "--max-cost-increase", type=float, default=DEFAULT_POLICY.max_cost_increase
+    )
+
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
 
@@ -232,6 +318,12 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_controls(root, _load(root), args.timeout))
     if args.command == "run":
         try:
+            variant = None
+            if args.variant:
+                variant = load_variants(root / DEFAULT_VARIANTS).get(args.variant)
+                if variant is None:
+                    print(f"error: no variant {args.variant!r} in {DEFAULT_VARIANTS}")
+                    return 2
             return asyncio.run(
                 _run(
                     root,
@@ -242,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
                     timeout=args.timeout,
                     limit=args.limit,
                     cache=args.cache,
+                    variant=variant,
+                    max_usd=args.max_usd,
                 )
             )
         except MissingCredentials as error:
@@ -266,4 +360,33 @@ def main(argv: list[str] | None = None) -> int:
             labels=(labels[0], labels[-1]),
             use_holdout=not args.no_holdout,
         )
+    if args.command == "cycle":
+        policy = Policy(
+            alpha=args.alpha,
+            min_tasks=args.min_tasks,
+            min_effect=args.min_effect,
+            max_cost_increase=args.max_cost_increase,
+        )
+        names = [name.strip() for name in args.candidates.split(",") if name.strip()]
+        try:
+            return asyncio.run(
+                _cycle(
+                    root,
+                    _load(root),
+                    variants_dir=args.variants_dir,
+                    baseline_name=args.baseline,
+                    candidate_names=names,
+                    provider_name=args.provider,
+                    model=args.model,
+                    ledger=args.ledger,
+                    summary_path=args.summary,
+                    policy=policy,
+                    max_usd=args.max_usd,
+                    timeout=args.timeout,
+                    cache=args.cache,
+                )
+            )
+        except MissingCredentials as error:
+            print(f"error: {error}")
+            return 2
     return 2
