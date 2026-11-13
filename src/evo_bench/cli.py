@@ -71,6 +71,8 @@ def status(root: Path) -> int:
     print(f"EVO_TMP   {os.environ.get('EVO_TMP', '-')}")
     print(f"SCRATCH   {os.environ.get('SCRATCH', '-')}")
     print(f"tau-ai    {_tau_version()}")
+    print(f"provider  {os.environ.get('EVO_PROVIDER', 'fake')}")
+    print(f"model     {os.environ.get('EVO_MODEL') or '-'}")
 
     corpus = _find_corpus(root)
     if corpus is None:
@@ -273,7 +275,11 @@ def main(argv: list[str] | None = None) -> int:
     control.add_argument("--timeout", type=float, default=120.0)
 
     run = sub.add_parser("run", help="run the agent over the corpus")
-    run.add_argument("--provider", default="fake", help="fake or openai-compatible")
+    run.add_argument(
+        "--provider",
+        default=os.environ.get("EVO_PROVIDER", "fake"),
+        help="fake, openai, openrouter, huggingface, ollama, or any OpenAI-compatible preset",
+    )
     run.add_argument("--model", default=os.environ.get("EVO_MODEL", "fake"))
     run.add_argument("--ledger", type=Path, default=Path(DEFAULT_LEDGER))
     run.add_argument("--timeout", type=float, default=300.0)
@@ -310,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--variants-dir", type=Path, default=Path(DEFAULT_VARIANTS))
     cycle_cmd.add_argument("--baseline", default="baseline")
     cycle_cmd.add_argument("--candidates", required=True, help="comma separated variant names")
-    cycle_cmd.add_argument("--provider", default="fake")
+    cycle_cmd.add_argument("--provider", default=os.environ.get("EVO_PROVIDER", "fake"))
     cycle_cmd.add_argument("--model", default=os.environ.get("EVO_MODEL", "fake"))
     cycle_cmd.add_argument("--ledger", type=Path, default=Path("runs/cycle.jsonl"))
     cycle_cmd.add_argument("--summary", type=Path, default=Path("runs/cycle-summary.md"))
