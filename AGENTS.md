@@ -55,6 +55,7 @@ The pixi Python env has a preinstalled set of tools - suggest expanding it, if n
 - `python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after`
 - `python -m evo_bench gate runs/a.jsonl runs/b.jsonl` - apply the promotion policy, exit 0 only on promote
 - `python -m evo_bench cycle --candidates strict,smallest-diff` - run basis and candidates, then gate each
+- `python -m evo_bench report --ledger runs/cycle.jsonl` - write a self-contained HTML receipt
 - `scripts/sandbox.sh REPO CMD...` - run a command with the repo read-only, a throwaway work dir and no network
 
 ## docs is the home of the GitHub static web page

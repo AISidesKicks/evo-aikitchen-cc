@@ -79,6 +79,7 @@ python -m evo_bench run --provider fake --limit 3
 python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
 python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
 python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
+python -m evo_bench report --ledger runs/cycle.jsonl --out runs/report.html
 ```
 
 The gate is the decision rule from the docs made executable. It refuses to promote on fewer
@@ -91,6 +92,11 @@ writes `runs/cycle-summary.md`. Variants live in `benchmarks/variants/<name>/`, 
 optional `variant.toml` (model, turn budget, tool allow list) and `system.md` (instructions
 appended to the base prompt). The directory name is the variant's identity. `--max-usd` stops
 the cycle between runs, so the cap is a budget rather than a report.
+
+`evo_bench report` turns a ledger into one self-contained HTML file: inline CSS, no
+JavaScript, no external assets. Pass rate with a Wilson interval, cost per variant, the paired
+delta and p value against the baseline, and a per-task grid. It is the receipt for a campaign,
+and it can be attached to a pull request without a running service.
 
 `TMPDIR` points at `/tmp`, because pixi writes its own temp files before activation
 scripts run, so `TMPDIR` can never point at a directory pixi has to create. `EVO_TMP` is
@@ -116,6 +122,7 @@ committed. `.env.example` holds empty placeholders.
 - [x] Promotion gate with a fixed policy
 - [x] Response cache for cheap replay
 - [x] Variants, cycles and a budget-capped search loop
+- [x] Self-contained HTML run report
 - [ ] Task corpus with 20 real tasks from commits and incidents
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
