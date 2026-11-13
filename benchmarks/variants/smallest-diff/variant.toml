@@ -1,2 +1,1 @@
 notes = "Bias towards the smallest change that passes, to test whether scope discipline helps."
-max_turns = 12

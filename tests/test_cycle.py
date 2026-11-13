@@ -105,7 +105,7 @@ def test_load_variants_from_the_repository():
     variants = load_variants(ROOT / "benchmarks" / "variants")
 
     assert {"baseline", "strict", "smallest-diff", "no-bash"} <= set(variants)
-    assert variants["strict"].max_turns == 20
+    assert variants["strict"].max_turns is None
     assert "acceptance command" in variants["strict"].system_addendum
     assert variants["no-bash"].tools == ("read", "write", "edit")
 

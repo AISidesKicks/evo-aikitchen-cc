@@ -1,2 +1,1 @@
 notes = "Requires the agent to run the acceptance check before stopping."
-max_turns = 20
