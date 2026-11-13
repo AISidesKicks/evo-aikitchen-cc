@@ -20,6 +20,11 @@ from pathlib import Path
 
 from evo_bench import __version__
 from evo_bench.cache import CachingProvider, ResponseCache
+from evo_bench.calibrate import (
+    apply as apply_calibration,
+    report as calibrate_report,
+    summarise as summarise_calibration,
+)
 from evo_bench.compare import compare, report
 from evo_bench.cycle import run_cycle, write_summary
 from evo_bench.gate import Policy, evaluate, report as gate_report
@@ -340,6 +345,53 @@ def _estimate(
     return 0
 
 
+async def _calibrate(
+    root: Path,
+    tasks: list[Task],
+    *,
+    provider_name: str,
+    model: str,
+    ledger: Path,
+    tasks_path: Path,
+    ceiling: int,
+    concurrency: int,
+    timeout: float,
+    deadline: float | None,
+    headroom: float,
+    write: bool,
+) -> int:
+    """Run the baseline at a generous ceiling and record the turns each task used."""
+    provider = build_provider(provider_name)
+    book = load_prices(DEFAULT_PRICES) if Path(DEFAULT_PRICES).exists() else None
+
+    result = await run_cycle(
+        tasks,
+        baseline=Variant(name="baseline"),
+        candidates=[],
+        provider=provider,
+        model=model,
+        ledger=root / ledger,
+        workdir_for=_workdir,
+        policy=Policy(),
+        max_turns=ceiling,
+        deadline=deadline,
+        timeout=timeout,
+        base=root,
+        prices=book,
+        concurrency=concurrency,
+    )
+
+    calibrations = summarise_calibration(result.rows, headroom=headroom)
+    print(calibrate_report(calibrations))
+    changes = apply_calibration(root / tasks_path, calibrations, dry_run=not write)
+    if write:
+        print(f"\nupdated {len(changes)} task budget(s) in {tasks_path}")
+    else:
+        print("\ndry run: pass --write to update the cards")
+    print(f"spend ${result.spend:.4f}")
+    return 0
+
+
 def _secrets(root: Path) -> int:
     report = check_secrets(root)
     if report.secrets == 0:
@@ -567,6 +619,22 @@ def main(argv: list[str] | None = None) -> int:
     plan_cmd.add_argument("--discordant", type=float, default=0.1)
     plan_cmd.add_argument("--effect", type=float, default=None, help="also size the corpus")
 
+    calibrate_cmd = sub.add_parser(
+        "calibrate", help="set each task's turn budget from the turns it needs"
+    )
+    calibrate_cmd.add_argument("--tasks", type=Path, default=None)
+    calibrate_cmd.add_argument("--split", default=None, choices=["train", "holdout", "all"])
+    calibrate_cmd.add_argument("--provider", default=os.environ.get("EVO_PROVIDER", "fake"))
+    calibrate_cmd.add_argument("--model", default=os.environ.get("EVO_MODEL", "fake"))
+    calibrate_cmd.add_argument("--ledger", type=Path, default=Path("runs/calibrate.jsonl"))
+    calibrate_cmd.add_argument("--ceiling", type=int, default=40)
+    calibrate_cmd.add_argument("--concurrency", type=int, default=8)
+    calibrate_cmd.add_argument("--timeout", type=float, default=600.0)
+    calibrate_cmd.add_argument("--deadline", type=float, default=300.0)
+    calibrate_cmd.add_argument("--headroom", type=float, default=1.5)
+    calibrate_cmd.add_argument("--limit", type=int, default=None)
+    calibrate_cmd.add_argument("--write", action="store_true", help="update the task cards")
+
     estimate_cmd = sub.add_parser("estimate", help="cost a campaign before running it")
     estimate_cmd.add_argument("--tasks", type=Path, default=None)
     estimate_cmd.add_argument("--split", default=None, choices=["train", "holdout", "all"])
@@ -609,7 +677,9 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(
                 _run(
                     root,
-                    _load(root, args.tasks, args.split),
+                    (_load(root, args.tasks, args.split))[: args.limit]
+                    if args.limit
+                    else _load(root, args.tasks, args.split),
                     provider_name=args.provider,
                     model=args.model,
                     ledger=args.ledger,
@@ -656,6 +726,32 @@ def main(argv: list[str] | None = None) -> int:
             print(f"to resolve {args.effect:.0%}: {needed['independent']} tasks independent, "
                   f"{needed['paired']} paired")
         return 0
+    if args.command == "calibrate":
+        if args.tasks is None:
+            print("error: --tasks is required for calibration")
+            return 2
+        try:
+            return asyncio.run(
+                _calibrate(
+                    root,
+                    (_load(root, args.tasks, args.split))[: args.limit]
+                    if args.limit
+                    else _load(root, args.tasks, args.split),
+                    provider_name=args.provider,
+                    model=args.model,
+                    ledger=args.ledger,
+                    tasks_path=args.tasks,
+                    ceiling=args.ceiling,
+                    concurrency=args.concurrency,
+                    timeout=args.timeout,
+                    deadline=args.deadline,
+                    headroom=args.headroom,
+                    write=args.write,
+                )
+            )
+        except MissingCredentials as error:
+            print(f"error: {error}")
+            return 2
     if args.command == "estimate":
         return _estimate(
             root,
