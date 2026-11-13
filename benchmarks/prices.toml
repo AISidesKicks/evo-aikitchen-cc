@@ -1,0 +1,10 @@
+# Model prices, in USD per million tokens.
+# Read from https://openrouter.ai/api/v1/models on 2026-11-13.
+# Refresh with: python -m evo_bench prices --refresh
+source = "https://openrouter.ai/api/v1/models"
+read_on = "2026-11-13"
+
+[models."deepseek/deepseek-v4.1-flash-1017"]
+input = 0.038000000000000006
+output = 0.5
+cache_read = 0.01

@@ -24,9 +24,10 @@ from evo_bench.compare import compare, report
 from evo_bench.cycle import run_cycle, write_summary
 from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
+from evo_bench.pricing import fetch_openrouter_prices, load_prices, write_prices
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.report import write_report
-from evo_bench.runner import run_task
+from evo_bench.runner import run_task, write_trace
 from evo_bench.secrets import check as check_secrets
 from evo_bench.tasks import Task, class_counts, load_tasks
 from evo_bench.variants import Variant, load_variants
@@ -35,6 +36,7 @@ DEFAULT_TASKS = "benchmarks/tasks.jsonl"
 EXAMPLE_TASKS = "benchmarks/tasks.example.jsonl"
 DEFAULT_LEDGER = "runs/ledger.jsonl"
 DEFAULT_VARIANTS = "benchmarks/variants"
+DEFAULT_PRICES = "benchmarks/prices.toml"
 DEFAULT_POLICY = Policy()
 
 
@@ -133,10 +135,14 @@ async def _run(
     cache: Path | None = None,
     variant: Variant | None = None,
     max_usd: float | None = None,
+    max_turns: int | None = None,
+    trace_dir: Path | None = None,
+    prices: Path | None = None,
 ) -> int:
     provider = build_provider(provider_name)
     if cache is not None:
         provider = CachingProvider(provider, ResponseCache(cache))
+    book = load_prices(prices) if prices is not None else None
     selected = tasks[:limit] if limit else tasks
     passed = 0
     spend = 0.0
@@ -154,7 +160,11 @@ async def _run(
             timeout=timeout,
             variant=variant,
             variant_name=variant.name if variant else "baseline",
+            max_turns=max_turns,
+            prices=book,
         )
+        if trace_dir is not None:
+            write_trace(result, root / trace_dir)
         append(ledger, result.row)
         spend += float(result.row.get("cost") or 0.0)
         passed += int(result.passed)
@@ -191,6 +201,30 @@ def _gate(
     )
     print(gate_report(decision, label_a=labels[0], label_b=labels[1]))
     return 0 if decision.promoted else 1
+
+
+def _prices(out: Path, *, refresh: bool, model: str | None) -> int:
+    if not refresh:
+        book = load_prices(out)
+        if not book.prices:
+            print(f"no price book at {out}; run with --refresh to fetch one")
+            return 1
+        print(f"{len(book.prices)} prices from {out} ({book.source or 'unknown'}, {book.read_on or 'undated'})")
+        return 0
+
+    book = fetch_openrouter_prices()
+    if model:
+        selected = book.prices.get(model)
+        if selected is None:
+            print(f"model {model!r} is not in the OpenRouter list")
+            return 1
+        book.prices = {model: selected}
+    if not book.prices:
+        print("the provider returned no prices")
+        return 1
+    path = write_prices(out, book)
+    print(f"wrote {len(book.prices)} price(s) to {path} from {book.source} on {book.read_on}")
+    return 0
 
 
 def _secrets(root: Path) -> int:
@@ -241,6 +275,9 @@ async def _cycle(
     max_usd: float | None,
     timeout: float,
     cache: Path | None,
+    max_turns: int | None = None,
+    trace_dir: Path | None = None,
+    prices: Path | None = None,
 ) -> int:
     variants = load_variants(root / variants_dir)
     if baseline_name not in variants:
@@ -255,6 +292,7 @@ async def _cycle(
     provider = build_provider(provider_name)
     if cache is not None:
         provider = CachingProvider(provider, ResponseCache(cache))
+    book = load_prices(prices) if prices is not None else None
 
     result = await run_cycle(
         tasks,
@@ -268,6 +306,9 @@ async def _cycle(
         max_usd=max_usd,
         timeout=timeout,
         base=root,
+        max_turns=max_turns,
+        trace_dir=trace_dir,
+        prices=book,
     )
 
     path = write_summary(result, root / summary_path, baseline=baseline_name)
@@ -311,6 +352,19 @@ def main(argv: list[str] | None = None) -> int:
         help="response cache file, so a campaign can be replayed without paying twice",
     )
     run.add_argument("--variant", default=None, help="variant name from benchmarks/variants")
+    run.add_argument("--max-turns", type=int, default=None, help="override the task turn budget")
+    run.add_argument(
+        "--trace-dir",
+        type=Path,
+        default=None,
+        help="write one JSONL transcript per run to this directory",
+    )
+    run.add_argument(
+        "--prices",
+        type=Path,
+        default=Path(DEFAULT_PRICES) if Path(DEFAULT_PRICES).exists() else None,
+        help="price book used to turn tokens into a cost",
+    )
     run.add_argument("--max-usd", type=float, default=None, help="stop before exceeding this spend")
 
     compare_cmd = sub.add_parser("compare", help="paired comparison of two ledgers")
@@ -343,6 +397,13 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--max-usd", type=float, default=None)
     cycle_cmd.add_argument("--timeout", type=float, default=300.0)
     cycle_cmd.add_argument("--cache", type=Path, default=None)
+    cycle_cmd.add_argument("--max-turns", type=int, default=None)
+    cycle_cmd.add_argument("--trace-dir", type=Path, default=None)
+    cycle_cmd.add_argument(
+        "--prices",
+        type=Path,
+        default=Path(DEFAULT_PRICES) if Path(DEFAULT_PRICES).exists() else None,
+    )
     cycle_cmd.add_argument("--alpha", type=float, default=DEFAULT_POLICY.alpha)
     cycle_cmd.add_argument("--min-tasks", type=int, default=DEFAULT_POLICY.min_tasks)
     cycle_cmd.add_argument("--min-effect", type=float, default=DEFAULT_POLICY.min_effect)
@@ -357,6 +418,11 @@ def main(argv: list[str] | None = None) -> int:
     report_cmd.add_argument("--baseline", default="baseline")
 
     sub.add_parser("secrets", help="check that .env secrets are not in tracked files or history")
+
+    prices_cmd = sub.add_parser("prices", help="read or refresh the model price book")
+    prices_cmd.add_argument("--out", type=Path, default=Path(DEFAULT_PRICES))
+    prices_cmd.add_argument("--refresh", action="store_true", help="fetch from OpenRouter")
+    prices_cmd.add_argument("--model", default=os.environ.get("EVO_MODEL"))
 
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
@@ -385,6 +451,9 @@ def main(argv: list[str] | None = None) -> int:
                     cache=args.cache,
                     variant=variant,
                     max_usd=args.max_usd,
+                    max_turns=args.max_turns,
+                    trace_dir=args.trace_dir,
+                    prices=args.prices,
                 )
             )
         except MissingCredentials as error:
@@ -403,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "secrets":
         return _secrets(root)
+    if args.command == "prices":
+        return _prices(root / args.out, refresh=args.refresh, model=args.model)
     if args.command == "gate":
         labels = tuple(part.strip() for part in args.labels.split(",", 1))
         policy = Policy(
@@ -443,6 +514,9 @@ def main(argv: list[str] | None = None) -> int:
                     max_usd=args.max_usd,
                     timeout=args.timeout,
                     cache=args.cache,
+                    max_turns=args.max_turns,
+                    trace_dir=(root / args.trace_dir) if args.trace_dir else None,
+                    prices=args.prices,
                 )
             )
         except MissingCredentials as error:

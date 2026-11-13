@@ -19,7 +19,8 @@ from typing import Callable, Sequence
 
 from evo_bench.gate import Decision, Policy, evaluate, report as gate_report
 from evo_bench.ledger import append
-from evo_bench.runner import RunResult, run_task
+from evo_bench.pricing import PriceBook
+from evo_bench.runner import RunResult, run_task, write_trace
 from evo_bench.tasks import Task
 from evo_bench.variants import Variant
 
@@ -53,6 +54,9 @@ async def run_cycle(
     max_usd: float | None = None,
     timeout: float = 300.0,
     base: str | Path | None = None,
+    max_turns: int | None = None,
+    trace_dir: str | Path | None = None,
+    prices: PriceBook | None = None,
 ) -> CycleResult:
     """Run the baseline and every candidate, then gate each candidate."""
     cycle_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -79,7 +83,11 @@ async def run_cycle(
                 timeout=timeout,
                 variant=variant,
                 variant_name=variant.name,
+                max_turns=max_turns,
+                prices=prices,
             )
+            if trace_dir is not None:
+                write_trace(run, trace_dir)
             append(ledger, run.row)
             result.rows.append(run.row)
             result.spend += float(run.row.get("cost") or 0.0)

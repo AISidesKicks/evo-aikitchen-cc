@@ -49,7 +49,8 @@ class Decision:
     reasons: tuple[str, ...]
     paired: Paired
     holdout: Paired | None = None
-    cost_ratio: float = 1.0
+    # NaN means the ratio was never computed, because a rule fired first.
+    cost_ratio: float = float("nan")
 
     @property
     def promoted(self) -> bool:
@@ -204,7 +205,8 @@ def report(decision: Decision, *, label_a: str = "baseline", label_b: str = "can
         f"mcnemar p      {decision.paired.p_value:.4f}",
         f"discordant     {decision.paired.discordant} "
         f"({decision.paired.a_only} {label_a}, {decision.paired.b_only} {label_b})",
-        f"cost ratio     {decision.cost_ratio:.2f}",
+        "cost ratio     "
+        + ("-" if math.isnan(decision.cost_ratio) else f"{decision.cost_ratio:.2f}"),
     ]
     if decision.holdout is not None and decision.holdout.tasks:
         lines.append(f"holdout        {decision.holdout.delta:+.1%} over {decision.holdout.tasks} tasks")
