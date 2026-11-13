@@ -1264,7 +1264,7 @@ to one number you should be tracking.
 
 | Audit | Question | Unit | Headline | What it changes in your loop |
 | --- | --- | --- | --- | --- |
-| RSI Tax | Does the loop pay? | Tokens | Tax of 109 to 393 percent for three of four methods; unused share 24 to 64 percent | Report tax beside accuracy; budget verification |
+| RSI Tax | Does the loop pay? | Tokens | Tax of 109 to 393 percent for three of five methods; unused share 24 to 64 percent | Report tax beside accuracy; budget verification |
 | TRUST | Is the gate honest? | False accept rate | 45.59 percent of greedy accepts are bad; 2.78 percent under a tested gate | Put a declared error budget on accepts |
 | Beneath the Surface | What actually moved? | Tasks | All 16 lineages gain and lose tasks; reliability up 5.2 while losing 10 tasks | Report gained and lost separately; regress-guard the gate |
 
@@ -1272,7 +1272,7 @@ The three questions are independent, and a loop can pass one while failing the o
 can be cheap and wrong. A loop can be statistically honest and too expensive. A loop can be
 both and still be trading your best tasks for new ones.
 
-### The five parts every loop needs
+### The eight parts every loop needs
 
 1. **A frozen evaluator.** Otherwise the loop optimizes the evaluator.
 2. **A cheap per-iteration cost.** Otherwise search eats the gains.
@@ -1813,7 +1813,7 @@ The five failure modes, their published evidence, and the mechanism that address
 | Search collapse | Branching paper: fixed dev set plateaus | Evolving subsets, pruning, branch guidance |
 | Visible-set overfit | Branching paper: Meta-Harness gains 3 points when selecting on test | Hidden holdout, dev-only selection |
 | Cost blowup | RHI citing Wang et al. 2026 | Search budget as a first-class metric |
-| Tax exceeds delivery | Tax paper: 109 to 393 percent for three of four methods | Improvement tokens counted separately, verification budgeted |
+| Tax exceeds delivery | Tax paper: 109 to 393 percent for three of five methods | Improvement tokens counted separately, verification budgeted |
 | Gate accepts noise | TRUST: greedy FER0 of 45.59 percent | Sequential test, declared error budget, overlap correction |
 | Coverage churn | Audit: 16 of 16 lineages gain and lose tasks; plus 5.2 reliability while losing 10 tasks | Gained and lost reported separately, regression clause in the gate |
 | Verifier fitting | Criteria Exposure: gains vanish when the criteria change slightly | Paraphrase the criteria, hold out a second verifier |
@@ -1984,7 +1984,7 @@ clearest demonstration that a learned prior can be actively wrong on new hardwar
 
 **The search cost is easy to hide.** The branching paper admits unequal token budgets. RHI's
 cited finding is that search cost can erase the gains entirely. The tax paper measures it at
-109 to 393 percent for three of four methods. Count it.
+109 to 393 percent for three of five methods. Count it.
 
 **The tax rate depends on the horizon.** A campaign that improves a harness once and then
 serves ten thousand tasks has a tiny tax. A loop that updates every four tasks has a huge one.
