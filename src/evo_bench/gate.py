@@ -72,13 +72,19 @@ def _train_rows(rows: Iterable[Mapping[str, object]]) -> list[Mapping[str, objec
     return [row for row in rows if str(row.get("split") or "train") != "holdout"]
 
 
+# A run that stopped before finishing, whether the turn cap or the wall clock
+# stopped it. Both mean the same thing for a comparison: the task was not given
+# the chance to succeed or fail on its merits.
+STOPPED_SHORT = frozenset({"max_turns", "deadline"})
+
+
 def truncated_share(rows: Iterable[Mapping[str, object]]) -> float:
-    """Share of runs that stopped at the turn cap instead of finishing."""
+    """Share of runs that stopped short instead of finishing."""
     rows = list(rows)
     if not rows:
         return 0.0
-    capped = sum(1 for row in rows if str(row.get("exit_reason")) == "max_turns")
-    return capped / len(rows)
+    stopped = sum(1 for row in rows if str(row.get("exit_reason")) in STOPPED_SHORT)
+    return stopped / len(rows)
 
 
 def cost_per_success(paired: Paired, cost: float, wins: int) -> float:

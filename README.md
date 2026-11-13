@@ -1,178 +1,103 @@
-# EVO
+# EVO for AI harnesses
 
-Notes for a blog series on **EVO**, the Evolutionary Value Delivery method built by Tom
-Gilb. The goal is to help people understand how EVO actually works, and why a method
-from 1960 keeps showing up in conversations about AI coding agents.
+A working bench that measures whether an AI coding harness improves, built on **EVO** (Tom
+Gilb's Evolutionary Value Delivery). One claim: code is cheap now, and quantified value,
+honest measurement and a budget are the expensive parts.
 
-The site lives at [evo.aikitchen.cc](https://evo.aikitchen.cc).
+Site: [evo.aikitchen.cc](https://evo.aikitchen.cc) · Overview: [docs/index.html](docs/index.html)
 
-## The angle
+## Deliverables
 
-EVO is a method for delivering small steps of **measurable** stakeholder value under a
-budget, and for letting the measurement decide what happens next. Quantified objectives,
-Planguage scalars, impact estimation, weekly steps, "done means value delivered".
+| | Delivered |
+| --- | --- |
+| Working bench | Python package `src/evo_bench`: task mining, sandbox, runner, grader, ledger, statistics, gate, report, cost accounting |
+| Task corpus | 67 tasks mined from real `pallets/click` commits, each with a gold patch, all passing gold and null controls |
+| Real campaigns | 4 campaigns against a live model, 168 billed runs, **$1.34** total spend |
+| Negative results | 4 documented failure modes, each caught by a rule rather than an opinion |
+| Interface | CLI (`control`, `run`, `cycle`, `gate`, `report`, `mine`, `calibrate`, `plan`, `estimate`), HTML receipts, CI |
+| Safety | bubblewrap sandbox (no network, no home, no keys), path-contained tools, secret scan and pre-commit hook |
+| Research | 7 long-form documents in [`mds/`](mds/), from the method to evaluation practice |
+| Tests | 157 passing, plus CI running tests, the secret scan and the controls |
 
-Most agile teams never do the measurement half. That was tolerable when engineering
-hours were scarce and code was expensive. In the AI era it is the opposite: code is
-cheap, and verified value, trustworthy context and inference spend are the scarce
-resources. The interesting claim of this series is that EVO maps onto coding agents more
-cleanly than the sprint rituals we kept.
+## The finding
 
-## Deep dives
+Four campaigns asked whether a prompt variant makes the agent better. Each failed to answer it
+for a different reason:
+
+| Campaign | Baseline | Candidate | What it exposed |
+| --- | --- | --- | --- |
+| 3 tasks, 12 turns | 0/3 | 2/3 | every run truncated mid tool call |
+| 3 tasks, 30 turns | 3/3 | 3/3 | the earlier "win" was the budget |
+| 24 tasks, 20 turns | 75% | 58% | 85 percent stopped short, the gate refused to decide |
+| 24 tasks, calibrated | 100% | 96% | corpus saturated, nothing left to win |
+
+![pass rates by campaign](docs/assets/campaigns.svg)
+
+The first row is the point. A tempting result, a plausible story about stricter prompts, and a
+trace showing nothing had finished. The bench now records `exit_reason` so that a run which ran
+out of budget cannot be counted as a clean failure, and the gate refuses a comparison when more
+than half the runs stopped short.
+
+![share of runs that stopped short](docs/assets/capped.svg)
+
+![smallest detectable difference by corpus size](docs/assets/resolution.svg)
+
+## How it works
+
+```
+tasks -> sandbox -> agent (Tau) -> grader -> ledger -> gate -> report
+```
+
+- **Mining.** A commit that changes tests and source becomes a task: the parent tree with the new
+  tests overlaid fails, and the source half of the commit makes it pass. Only the tests that flip
+  are graded.
+- **Sandbox.** The agent loop runs on the host because it needs the model API; tool execution runs
+  in bubblewrap with no network, no home directory and no inherited environment.
+- **Ledger.** One row per run: tokens, cost, turns, tool calls, exit reason, score.
+- **Gate.** Paired exact McNemar, a cost cap, a holdout guard and a truncation guard. It returns
+  promote, reject or inconclusive, with reasons.
+- **Receipts.** Every campaign produces a self-contained HTML report, and the charts above are
+  regenerated from the ledgers by `scripts/charts.py`.
+
+## Run it
+
+```sh
+pixi shell                     # evo1 environment
+pixi run test                  # 157 tests
+pixi run control               # gold passes, null fails, 67 tasks
+python -m evo_bench status     # corpus, splits, resolution
+python -m evo_bench plan       # what this corpus can resolve
+python -m evo_bench estimate --ledger runs/clickfair.jsonl
+```
+
+Providers are configuration, not code: `EVO_PROVIDER`, `EVO_MODEL`, `EVO_PROVIDER_KEY` in `.env`,
+with presets for OpenRouter, OpenAI, Hugging Face and local models. Keys stay on the host and
+never enter the sandbox. `pixi run secrets` checks nothing leaked.
+
+## The documents
 
 | Document | What it covers |
 | --- | --- |
-| [EVO in software development](mds/evo-sw-devel.md) | The method: origin, the delivery loop, Planguage, impact estimation, the ten principles, comparison with Scrum and XP, limits and a five-day adoption path |
-| [EVO in the AI harness era](mds/evo-in-ai-era.md) | The bridge: what the SWE-EVO benchmark measures, how long agents can run, why harnesses matter more than models, an EVO-to-harness mapping, token economics and a working protocol for one agent step |
-| [Building a custom AI harness with EVO principles](mds/evo-in-ai-harness.md) | The design guide: harness evidence from 2026, the ten principles as design rules, a reference architecture, component defaults with measured effects, contracts, budgets, routing and a staged build order |
-| [Simulating the EVO process for harness development](mds/evo-simulation.md) | The measurement protocol: scenario corpora, simulated stakeholders, step cards, run variance, ablation, fault injection, multi-session shifts, cost campaigns and how to test EVO's own claims |
-| [Simulating and building a self-improving EVO harness](mds/evo-rsi-harness.md) | The loop that improves the harness: RHI, branching search and InfraRSI, plus the three audits (the RSI tax, statistical gates, coverage churn), the frozen-evaluator rule, a reference RSI loop, the three clocks, overfitting curves, guardrails and a staged build order |
-| [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](mds/evo-custom-ai-harness.md) | The selection guide: why skills and hooks are two of thirteen layers, Tau in depth, JAZ and its published results, five more Python harnesses, coverage matrices, where Tau loses and what beats it, and the operator-shell plus experiment-bench architecture |
-| [Benchmarking and evaluating EVO](mds/evo-benchmark-evals.md) | The instrument check: the five distances between a benchmark and your value, benchmark arithmetic and paired designs, contamination and grader validity, the 2026 benchmark landscape, building an internal bench, what survives in production, and the missing experiment that would test EVO itself |
+| [EVO in software development](mds/evo-sw-devel.md) | the method, Planguage, impact estimation, the ten principles |
+| [EVO in the AI harness era](mds/evo-in-ai-era.md) | SWE-EVO, METR horizons, instruction following, token economics |
+| [Building a custom AI harness](mds/evo-in-ai-harness.md) | the thirteen layers, component defaults, contracts, budgets |
+| [Simulating the process](mds/evo-simulation.md) | scenario corpora, variance, ablation, fault injection |
+| [A self-improving harness](mds/evo-rsi-harness.md) | the loop, the three audits, the frozen evaluator rule |
+| [Choosing a harness](mds/evo-custom-ai-harness.md) | Tau, JAZ and the Python field, with the Python-only rule |
+| [Benchmarking and evaluating](mds/evo-benchmark-evals.md) | instrument quality, contamination, the metrics that survive |
 
-These are research notes, not marketing. Numbers are cited, vendor claims are labeled as
-vendor claims, and open questions are collected at the end of each document.
+## Limits
 
-## Repo layout
-
-```
-docs/        static GitHub Pages site (hand-written HTML only)
-mds/         research and technology overviews, linked from this README
-src/         the measurement loop (evo_bench package)
-benchmarks/  task corpus and the task card rules
-tests/       pytest suite for the bench
-scripts/     pixi activation and the bubblewrap sandbox wrapper
-runs/        ledger output, gitignored except .gitkeep
-scratch/     logs and artifacts, gitignored except .gitkeep
-```
-
-`docs/` holds nothing dynamic on purpose. GitHub Pages serves it directly, so there is
-no build step, no bundler and no framework in that directory.
+- The corpus saturates: the baseline solves all 24 calibrated train tasks, so pass rate cannot
+  rank variants on it. Difficulty screening is the next piece of work, tracked in
+  [INTENT.md](INTENT.md).
+- 24 paired tasks resolve only a large effect. The resolution curve above is the honest statement
+  of that, not a footnote.
+- One model, one repository, one task type (bug fixes with existing tests).
+- Judge or rubric grading for tasks without tests is designed but not built.
 
 ## Environment
 
-Python work runs in the isolated pixi workspace `evo1`:
-
-```sh
-pixi shell
-pixi info | grep Name   # should print evo1
-```
-
-The environment provides Python 3.12, `tau-ai` 0.4.11, pytest and the local `evo-bench`
-package, installed editable from `src/`.
-
-```sh
-pixi run default   # create the local dirs and print the paths
-pixi run test      # run the test suite
-pixi run bench     # report the corpus inventory and the Tau version
-pixi run control   # gold must pass and null must fail, for every task
-```
-
-The bench runs the agent on the host, because it needs network access to the model provider,
-and routes only tool execution into bubblewrap: read-only runtime, the locked pixi
-environment mounted read-only, the workspace read-write, an empty `HOME`, and no network.
-`read`, `write` and `edit` refuse any path outside the workspace, and `.env` files inside
-the workspace are masked.
-
-```sh
-python -m evo_bench run --provider fake --limit 3
-python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
-python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
-python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
-python -m evo_bench report --ledger runs/cycle.jsonl --out runs/report.html
-python -m evo_bench prices --refresh
-python -m evo_bench mine --repo /path/to/repo --limit 12
-python -m evo_bench plan --tasks benchmarks/mined/tasks.jsonl
-python -m evo_bench run --trials 3 --limit 5   # reliability, not luck
-```
-
-A corpus of real tasks comes from a repository's history, not from a fixture you
-invented. `mine` pairs each commit that changes tests and source into a task, with the
-failing tests as the acceptance check and the source half as the gold patch, and keeps
-only the tasks whose gold actually flips them.
-
-Costs come from `benchmarks/prices.toml`, which is a dated price book. Tau reports tokens
-and leaves cost unset, because a harness has no business knowing your negotiated rates, so
-the ledger multiplies tokens by prices you own:
-
-```sh
-python -m evo_bench prices --refresh     # fetch current OpenRouter prices for EVO_MODEL
-```
-
-Every run can also write a transcript with `--trace-dir runs/traces`. The ledger says what
-the score was; the trace says what the model actually did, which is the difference between
-debugging and guessing.
-
-The gate is the decision rule from the docs made executable. It refuses to promote on fewer
-than 20 paired tasks, demands a significant paired difference, caps the cost increase at 20
-percent, and rejects any regression on the holdout split. `--cache runs/cache.jsonl` stores
-model responses by request hash, so a campaign can be replayed without paying twice.
-
-A `cycle` runs the baseline variant and every candidate over the corpus, gates each one, and
-writes `runs/cycle-summary.md`. Variants live in `benchmarks/variants/<name>/`, with an
-optional `variant.toml` (model, turn budget, tool allow list) and `system.md` (instructions
-appended to the base prompt). The directory name is the variant's identity. `--max-usd` stops
-the cycle between runs, so the cap is a budget rather than a report.
-
-`evo_bench report` turns a ledger into one self-contained HTML file: inline CSS, no
-JavaScript, no external assets. Pass rate with a Wilson interval, cost per variant, the paired
-delta and p value against the baseline, and a per-task grid. It is the receipt for a campaign,
-and it can be attached to a pull request without a running service.
-
-`TMPDIR` points at `/tmp`, because pixi writes its own temp files before activation
-scripts run, so `TMPDIR` can never point at a directory pixi has to create. `EVO_TMP` is
-the private per-project tmpfs directory, created on activation. `SCRATCH` is the
-crash-safe scratch directory. Secrets live in `.env`, which is local only and never
-committed. `.env.example` holds empty placeholders:
-
-```sh
-cp .env.example .env
-source scripts/load-env.sh      # parses .env, prints no values
-```
-
-`EVO_PROVIDER` picks the endpoint: `fake` (the default, no network, no key), `openai`,
-`openrouter`, `huggingface`, `together`, `groq`, `ollama`, `lmstudio`, or any
-OpenAI-compatible endpoint through `EVO_BASE_URL`. `EVO_MODEL` and `EVO_PROVIDER_KEY`
-complete the pair. The model is called from the host process; the sandbox starts with
-`--clearenv`, so the agent's tools never see a key.
-
-```sh
-pixi run secrets                # no .env secret in a tracked file or in history
-scripts/install-hooks.sh        # the same check before every commit
-```
-
-The scanner reads `.env`, compares only secret-named values, and reports file names
-rather than values. If it ever finds a hit, rotate the key first: a commit that is pushed
-is public, and a rewritten history is a cleanup, not a fix.
-
-## Status
-
-- [x] Landing page stub and custom domain
-- [x] EVO software development overview
-- [x] EVO in the AI harness era
-- [x] Harness design guide
-- [x] Simulation protocol
-- [x] Self-improving harness (RSI) guide
-- [x] Custom AI harness comparison (Tau and JAZ)
-- [x] Benchmarking and evaluation guide
-- [x] pixi `default` task that creates the temp and scratch dirs
-- [x] Bench scaffold: task cards, ledger, statistics, sandbox wrapper
-- [x] Seven-task corpus with gold and null controls
-- [x] Sandboxed tool layer with path containment
-- [x] Paired comparison with an exact McNemar test
-- [x] Promotion gate with a fixed policy
-- [x] Response cache for cheap replay
-- [x] Variants, cycles and a budget-capped search loop
-- [x] Self-contained HTML run report
-- [x] Real cost accounting from a dated price book
-- [x] Run traces and a first campaign against a live model
-- [x] Task mining from a repository's history
-- [x] Twelve mined tasks from click, validated by gold and null controls
-- [x] Resolution planning, so a corpus size is chosen rather than assumed
-- [x] CI: tests, secret scan and sandboxed controls on every push
-- [ ] Task corpus with 20 real tasks from commits and incidents
-- [ ] Landing page content and navigation
-- [ ] Optimised logo asset
-
-Project intent and open questions are in [INTENT.md](INTENT.md). Working conventions for
-agents and humans are in [AGENTS.md](AGENTS.md).
+Python work runs in the isolated pixi workspace `evo1`: Python 3.12, `tau-ai` 0.4.11, pytest, and
+the local `evo-bench` package installed editable. `docs/` is hand-written static HTML for GitHub
+Pages, with no build step.

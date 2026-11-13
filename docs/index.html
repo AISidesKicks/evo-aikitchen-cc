@@ -1,6 +1,129 @@
-EVO
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVO for AI harnesses</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #e5e7eb; --muted: #9ca3af; --line: #374151; --accent: #60a5fa; } }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 60rem; padding: 0 1.25rem 4rem; color: var(--ink);
+         font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 2rem 0 1rem; }
+  header img { width: 100%; height: auto; border-radius: 10px; display: block; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 1.5rem 0 0.5rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 0.5rem; }
+  p.lede { font-size: 1.1rem; color: var(--muted); margin: 0; }
+  .muted { color: var(--muted); }
+  .pipeline { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+  .pipeline div { flex: 1 1 8rem; border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.7rem; }
+  .pipeline strong { display: block; font-size: 0.85rem; }
+  .pipeline span { font-size: 0.8rem; color: var(--muted); }
+  figure { margin: 1.5rem 0; }
+  figure img { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 0.4rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line); }
+  th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  a { color: var(--accent); }
+  code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem 1rem; overflow-x: auto; }
+  ul.docs { padding-left: 1.1rem; }
+  ul.docs li { margin: 0.3rem 0; }
+  footer { margin-top: 3rem; border-top: 1px solid var(--line); padding-top: 1rem; font-size: 0.9rem; color: var(--muted); }
+</style>
+</head>
+<body>
 
-AgileByExample 2017: Tom Gilb - Evo: The Most Advanced Agile Process
-https://www.youtube.com/watch?v=f0In1hDKjkw
+<header>
+  <img src="EVO.jpeg" alt="EVO principles poster: ten principles around an iterative weekly value delivery cycle, and the contrast between done as code delivered and done as measurable stakeholder value delivered">
+  <h1>EVO for AI harnesses</h1>
+  <p class="lede">Code became cheap. Quantified value, honest measurement and a budget are now the
+  expensive parts. This site is a working argument for that, with a bench that measures it.</p>
+</header>
 
+<main>
 
+<h2>The claim</h2>
+<p>EVO, Tom Gilb's Evolutionary Value Delivery, asks for a quantified objective, a meter, a
+budget and a small step that moves the number. Most agile teams kept the steps and dropped the
+measurement. With agents that is no longer affordable: an agent can produce a thousand changes
+nobody measured, for a bill nobody predicted.</p>
+<p>The interesting part is that EVO maps onto agent work more cleanly than the rituals we kept.
+A task is a step. An acceptance check is a meter. A token budget is a cost. And "done means value
+delivered" is the only rule that stops an agent declaring victory.</p>
+
+<h2>The bench, in one line</h2>
+<div class="pipeline">
+  <div><strong>Tasks</strong><span>mined from real commits, with a gold patch</span></div>
+  <div><strong>Sandbox</strong><span>tools run without network, home or keys</span></div>
+  <div><strong>Agent</strong><span>Tau, driven by its Python harness API</span></div>
+  <div><strong>Grader</strong><span>only the tests that must flip</span></div>
+  <div><strong>Ledger</strong><span>tokens, cost, turns, exit reason</span></div>
+  <div><strong>Gate</strong><span>paired statistics, cost cap, holdout</span></div>
+</div>
+<p class="muted">Every run produces a row. Every campaign produces a report. Nothing is scored by
+reading a transcript.</p>
+
+<h2>What we measured, and what it caught</h2>
+<p>Four campaigns asked the same question: does a prompt variant make the agent better? Each one
+failed to answer it for a different reason, and the bench caught each reason with a rule rather
+than an opinion.</p>
+
+<table>
+  <tr><th>Campaign</th><th class="num">Baseline</th><th class="num">Candidate</th><th>What it exposed</th></tr>
+  <tr><td>3 tasks, 12 turns</td><td class="num">0 / 3</td><td class="num">2 / 3</td><td>every run truncated mid tool call</td></tr>
+  <tr><td>3 tasks, 30 turns</td><td class="num">3 / 3</td><td class="num">3 / 3</td><td>the earlier "win" was the budget</td></tr>
+  <tr><td>24 tasks, 20 turns</td><td class="num">75%</td><td class="num">58%</td><td>79 percent capped, the gate refused to decide</td></tr>
+  <tr><td>24 tasks, calibrated</td><td class="num">100%</td><td class="num">96%</td><td>corpus saturated, nothing left to win</td></tr>
+</table>
+
+<figure>
+  <img src="assets/campaigns.svg" alt="Bar chart of pass rates across four campaigns, showing the candidate ahead in the truncated campaign, tied in the second, behind under a tight cap, and level once budgets were calibrated">
+  <figcaption>Same question, four different failure modes. A pass rate without its budget is a
+  number about the budget.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/capped.svg" alt="Bar chart of the share of runs that stopped short: zero at thirty turns, eighty-five percent at twenty turns, twelve percent with calibrated budgets">
+  <figcaption>Runs that stop short are not failures, they are unfinished. The gate refuses a
+  comparison when more than half of them are unfinished.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/resolution.svg" alt="Curve of the smallest detectable difference against corpus size: 34 percent at 24 tasks, 17 percent at 67 tasks, 10 percent at 252 tasks">
+  <figcaption>Twenty-four tasks can only detect a 32 point difference. Most real harness changes
+  are worth two to five. The curve is the reason so many benchmark claims are noise.</figcaption>
+</figure>
+
+<h2>What is in the repository</h2>
+<ul class="docs">
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-sw-devel.md">EVO in software development</a> - the method, Planguage, impact estimation, the ten principles.</li>
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-in-ai-era.md">EVO in the AI harness era</a> - SWE-EVO, METR horizons, instruction following, token economics.</li>
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-in-ai-harness.md">Building a custom harness</a> - the thirteen layers, component defaults, contracts, budgets.</li>
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-simulation.md">Simulating the process</a> - scenario corpora, variance, ablation, fault injection.</li>
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-rsi-harness.md">A self-improving harness</a> - the loop, the audits, the frozen evaluator rule.</li>
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-custom-ai-harness.md">Choosing a harness</a> - Tau, JAZ and the Python field, with the Python-only rule.</li>
+  <li><a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/mds/evo-benchmark-evals.md">Benchmarking and evaluating</a> - instrument quality, contamination, the metrics that survive.</li>
+</ul>
+
+<h2>Run it</h2>
+<pre><code>pixi run control                                  # gold passes, null fails, 67 tasks
+python -m evo_bench estimate --ledger runs/clickfair.jsonl
+python -m evo_bench cycle --candidates traceback-first --concurrency 8
+python -m evo_bench report --ledger runs/clickfair.jsonl</code></pre>
+<p class="muted">The charts on this page are regenerated from the ledgers by
+<code>scripts/charts.py</code>, so they cannot drift from the data.</p>
+
+</main>
+
+<footer>
+  <p>157 tests. 1.34 dollars of model spend. Four published negative results, which is the point.</p>
+  <p><a href="https://github.com/AISidesKicks/evo-aikitchen-cc">Source</a> ·
+  <a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/README.md">README</a> · <a href="https://github.com/AISidesKicks/evo-aikitchen-cc/blob/master/INTENT.md">Intent</a></p>
+</footer>
+
+</body>
+</html>
