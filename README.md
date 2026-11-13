@@ -102,7 +102,18 @@ and it can be attached to a pull request without a running service.
 scripts run, so `TMPDIR` can never point at a directory pixi has to create. `EVO_TMP` is
 the private per-project tmpfs directory, created on activation. `SCRATCH` is the
 crash-safe scratch directory. Secrets live in `.env`, which is local only and never
-committed. `.env.example` holds empty placeholders.
+committed. `.env.example` holds empty placeholders:
+
+```sh
+cp .env.example .env
+source scripts/load-env.sh      # parses .env, prints no values
+```
+
+`EVO_PROVIDER` picks the endpoint: `fake` (the default, no network, no key), `openai`,
+`openrouter`, `huggingface`, `together`, `groq`, `ollama`, `lmstudio`, or any
+OpenAI-compatible endpoint through `EVO_BASE_URL`. `EVO_MODEL` and `EVO_PROVIDER_KEY`
+complete the pair. The model is called from the host process; the sandbox starts with
+`--clearenv`, so the agent's tools never see a key.
 
 ## Status
 

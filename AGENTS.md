@@ -29,6 +29,8 @@ Keep all info as very simple HTML pages.
 
 - `.env` is local only and gitignored. Never print, log, paste or commit its values.
 - `.env.example` holds empty placeholders only.
+- `scripts/load-env.sh` loads `.env` into the current shell without printing values. Source it, do not run it.
+- Provider keys are read by the host process that calls the model. The sandbox starts with `--clearenv`, so the agent's tools cannot see them.
 - `HF_TOKEN` is the read-only Hugging Face token. Load it into the process environment; never put it in URLs, dataset files or manifests.
 
 ## Datasets
