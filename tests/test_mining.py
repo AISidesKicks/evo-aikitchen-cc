@@ -204,3 +204,13 @@ def test_mine_drops_a_commit_whose_gold_does_not_flip(tmp_path):
 
     # The first commit still mines; the no-op commit is dropped.
     assert all("comment only" not in task.candidate.subject for task in mined)
+
+
+def test_mine_writes_a_card_per_task_as_it_goes(tmp_path):
+    """A long mining run must not lose its work if it is interrupted."""
+    repo = make_repo(tmp_path)
+    mine(repo, out=tmp_path / "mined", fixtures=tmp_path / "fixtures", limit=1, scan=10)
+
+    lines = (tmp_path / "mined" / "tasks.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert "7996" not in lines[0]

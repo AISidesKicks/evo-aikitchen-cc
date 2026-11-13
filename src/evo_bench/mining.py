@@ -340,6 +340,12 @@ def mine(
     fixture_root.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
 
+    # Cards are written as they are mined, not at the end. A long mining run
+    # that is interrupted should cost the interrupted task, not the whole corpus.
+    cards_path = out_dir / "tasks.jsonl"
+    cards_path.parent.mkdir(parents=True, exist_ok=True)
+    cards_path.write_text("", encoding="utf-8")
+
     mined: list[Mined] = []
     for candidate in candidates(base, scan=scan, limit=limit * 3):
         if len(mined) >= limit:
@@ -365,11 +371,9 @@ def mine(
                 split=split,
             )
         )
+        with cards_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(_card(mined[-1], Path.cwd())) + "\n")
         print(f"  mined {candidate.commit} flips={len(flips):<3} {candidate.subject[:50]}")
-
-    # Cards are relative to the working directory the miner was run from, which
-    # is the bench repository, not the repository being mined.
-    _write_cards(mined, out_dir / "tasks.jsonl", Path.cwd())
     shutil.rmtree(scratch, ignore_errors=True)
     return mined
 
@@ -386,11 +390,40 @@ def _relative(path: Path, base: Path) -> str:
         return str(path)
 
 
-def _write_cards(mined: list[Mined], path: Path, base: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for task in mined:
-            card = {
+def _card(task: Mined, base: Path) -> dict:
+    """One task card, with paths relative to the bench repository."""
+    return {
+        "id": task.id,
+        "prompt": prompt_for(task.candidate),
+        "acceptance": task.acceptance,
+        "class": "bugfix",
+        "source": "commit",
+        "fixture": _relative(task.fixture, base),
+        "gold": _relative(task.gold, base),
+        "repo": task.candidate.commit,
+        "difficulty": "medium",
+        "contamination": "public",
+        "split": task.split,
+        "partial": "A change that fixes some of the listed tests",
+        "notes": f"{len(task.flips)} flipping tests from {task.candidate.subject}",
+    }
+
+
+def _relative(path: Path, base: Path) -> str:
+    """Store paths relative to the mined repository when possible.
+
+    Absolute host paths in a task card make the corpus unusable on another
+    machine, and the fixture directory is regenerable anyway.
+    """
+    try:
+        return path.resolve().relative_to(base.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _card(task: Mined, base: Path) -> dict:
+    """One task card, with paths relative to the bench repository."""
+    return {
                 "id": task.id,
                 "prompt": prompt_for(task.candidate),
                 "acceptance": task.acceptance,
@@ -403,6 +436,5 @@ def _write_cards(mined: list[Mined], path: Path, base: Path) -> None:
                 "contamination": "public",
                 "split": task.split,
                 "partial": "A change that fixes some of the listed tests",
-                "notes": f"{len(task.flips)} flipping tests from {task.candidate.subject}",
-            }
-            handle.write(json.dumps(card) + "\n")
+        "notes": f"{len(task.flips)} flipping tests from {task.candidate.subject}",
+    }
