@@ -722,3 +722,5 @@ Method:
   layer: a harness that revises itself under a frozen evaluator.
 - [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
   for the harness you simulate against, including its thirteen layers.
+- [Benchmarking and evaluating EVO](evo-benchmark-evals.md) for the public landscape, the
+  run card and the production measurements that follow the simulation.

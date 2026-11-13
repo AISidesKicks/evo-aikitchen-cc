@@ -708,3 +708,5 @@ Method:
   that improves the harness, and the guardrails it needs.
 - [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
   for the tool choice itself: thirteen layers, Tau, JAZ, and the rest of the Python field.
+- [Benchmarking and evaluating EVO](evo-benchmark-evals.md) for the instrument check:
+  statistics, contamination, graders and the metrics that survive.

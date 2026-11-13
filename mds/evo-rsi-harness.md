@@ -2235,6 +2235,8 @@ Harness design and measurement:
 - [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
   for the harness you improve, and the case for splitting the operator shell from the
   experiment bench.
+- [Benchmarking and evaluating EVO](evo-benchmark-evals.md) for the instrument behind the
+  audits: intervals, paired designs, graders and the metrics that survive.
 - [EVO in the AI harness era](evo-in-ai-era.md) for the evidence base and the E1 to E10
   mapping.
 - [EVO in software development](evo-sw-devel.md) for the method itself.

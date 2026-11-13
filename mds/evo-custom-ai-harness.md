@@ -1477,6 +1477,8 @@ Harness design and measurement:
   corpora, run variance, ablation design and fault injection.
 - [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) for the loop
   that improves the harness, the three audits and the frozen evaluator rule.
+- [Benchmarking and evaluating EVO](evo-benchmark-evals.md) for how to score the result:
+  benchmark arithmetic, contamination and the metrics that survive.
 - [EVO in the AI harness era](evo-in-ai-era.md) for the evidence base and the E1 to E10
   mapping.
 - [EVO in software development](evo-sw-devel.md) for the method itself.

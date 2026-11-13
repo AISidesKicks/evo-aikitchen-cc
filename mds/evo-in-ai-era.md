@@ -645,3 +645,5 @@ Next in the series:
   loop: the harness that improves the harness, and the guardrails that keep it honest.
 - [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](evo-custom-ai-harness.md)
   picks the tool you build on, and argues that skills and hooks are two of thirteen layers.
+- [Benchmarking and evaluating EVO](evo-benchmark-evals.md) is the last step: how to know
+  whether any of it worked, and what to measure when the leaderboard cannot tell you.
