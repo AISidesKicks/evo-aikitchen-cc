@@ -114,10 +114,13 @@ budget, and a comparison made mostly of truncated runs measures turn efficiency
 rather than quality. The gate refuses to decide when more than half the runs were
 capped, and the report counts them per variant.
 
-This came from a real campaign on three mined tasks: after twelve turns the
-baseline had 0/3 and the `strict` variant 2/3, and every single run ended
+This came from a real campaign on three mined tasks. At twelve turns the
+baseline scored 0/3 and the `strict` variant 2/3, and every run ended
 mid-tool-call. The tempting reading was "the stricter prompt helps". The correct
-reading was "twelve turns is fewer than these tasks need".
+reading was "twelve turns is fewer than these tasks need". Re-running the same
+two variants at thirty turns gave 3/3 and 3/3, delta zero, exact McNemar p = 1.0,
+with every run finishing rather than being capped. The gain was the budget, not
+the prompt.
 
 ## Trials and reliability
 
