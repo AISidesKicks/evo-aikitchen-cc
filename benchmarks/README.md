@@ -137,6 +137,13 @@ percent. Two honest responses, and this bench uses both:
 The failure to avoid is quoting "no difference in pass rate" from a corpus where
 the pass rate was pinned at 100 percent.
 
+This corpus hit that ceiling with calibrated budgets: 24 of 24 for the baseline and
+23 of 24 for `traceback-first`, one discordant task, exact McNemar p = 1.0, and 11
+percent lower spend for the candidate. Four campaigns on click produced, in order,
+a budget confound, a truncation refusal, a saturation tie, and a null. All four are
+recorded, and none of them is a reason to believe a prompt variant improved coding
+ability on this corpus. The next corpus needs harder tasks, not a different flag.
+
 ## Concurrency
 
 `--concurrency N` runs N tasks at once. Runs are independent by construction:
