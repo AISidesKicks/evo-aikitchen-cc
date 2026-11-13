@@ -718,3 +718,5 @@ Method:
 - [EVO in software development](evo-sw-devel.md)
 - [EVO in the AI harness era](evo-in-ai-era.md)
 - [Building a custom AI harness with EVO principles](evo-in-ai-harness.md)
+- [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) for the next
+  layer: a harness that revises itself under a frozen evaluator.

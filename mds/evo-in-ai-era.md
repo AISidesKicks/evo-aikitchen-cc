@@ -641,3 +641,5 @@ Next in the series:
   mapping into a design guide.
 - [Simulating the EVO process for harness development](evo-simulation.md) shows how to
   measure the harness without fooling yourself.
+- [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) closes the
+  loop: the harness that improves the harness, and the guardrails that keep it honest.

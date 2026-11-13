@@ -704,3 +704,5 @@ Method:
 - [EVO in software development](evo-sw-devel.md)
 - [EVO in the AI harness era](evo-in-ai-era.md)
 - [Simulating the EVO process for harness development](evo-simulation.md)
+- [Simulating and building a self-improving EVO harness](evo-rsi-harness.md) for the loop
+  that improves the harness, and the guardrails it needs.
