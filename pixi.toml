@@ -38,10 +38,16 @@ depends-on = ["init"]
 cmd = "python -m evo_bench status"
 description = "Report the bench inventory and configuration"
 
+[tasks.control]
+depends-on = ["init"]
+cmd = "python -m evo_bench control"
+description = "Run the gold and null controls over the corpus"
+
 [dependencies]
 python = "3.12.*"
 huggingface_hub = ">=1"
 pytest = ">=9.2.0,<10"
+pytest-asyncio = ">=1.5.0,<2"
 
 [pypi-dependencies]
 tau-ai = ">=0.4.11, <0.5"
