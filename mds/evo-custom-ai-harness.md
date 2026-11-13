@@ -55,6 +55,7 @@ harness](evo-rsi-harness.md) for the loop that improves the thing you build here
 - [JAZ in depth](#jaz-in-depth)
 - [The rest of the field](#the-rest-of-the-field)
 - [Head to head](#head-to-head)
+- [Language is a layer: the Python-only rule](#language-is-a-layer-the-python-only-rule)
 - [Where Tau wins](#where-tau-wins)
 - [Where Tau loses, and what beats it](#where-tau-loses-and-what-beats-it)
 - [The architecture I would actually run](#the-architecture-i-would-actually-run)
@@ -980,9 +981,113 @@ covers only part of the layer.
 | Support | community | paper authors | HF | OpenAI | Pydantic | Princeton team | Anthropic |
 | Lock-in | low | none | low | medium | low | none | high |
 
+## Language is a layer: the Python-only rule
+
+You want a fully Python stack. So does this project. That deserves to be treated as a design
+constraint rather than a preference to be traded against features, because it eliminates
+most of the field before the feature comparison starts. It is also the strongest argument
+for Tau over Pi, and it is separate from the layer-by-layer case that follows.
+
+The language boundary is not one of the thirteen layers, because it is not a capability.
+It is a tax on every layer you touch, and the tax is paid per iteration. That is why it
+belongs in a selection guide at all.
+
+### The boundary Pi has and Tau does not
+
+| | Pi | Tau |
+| --- | --- | --- |
+| Agent loop | TypeScript | Python |
+| Extension language | TypeScript modules, loaded in process | Python modules with `def setup(tau)` |
+| Tool definition | TypeScript `AgentTool` | Python `AgentTool` |
+| Embed in your own program | TypeScript SDK, Node or Bun | `tau_agent.AgentHarness`, any Python process |
+| Cross-language escape hatch | RPC mode: JSONL on stdin and stdout | RPC mode too, but unnecessary from Python |
+| Runtime to install | Node 22.19 or newer | Python 3.12 or newer |
+| Distance from your scorer | A process hop | An import |
+
+Pi's RPC mode is a genuine design decision, not a workaround. The docs describe it as the
+path for "other languages, isolated processes, IDEs, or custom clients", it uses strict
+JSONL framing with correlated responses, and the documentation ships a Python subprocess
+example. It works, and people use it.
+
+But it is still a process boundary sitting in the middle of the thing you are trying to
+improve. Pi's extension surface is richer than Tau's - per-request context rewriting,
+`codemode` in a QuickJS sandbox, tool search, a real package manager - and every one of
+those advantages is reachable only from TypeScript. From Python you can call the agent,
+send prompts, receive events and read sessions. You cannot reach into the loop and change
+what it does on turn four.
+
+That distinction is the whole argument. Capability you cannot reach from your language is
+not capability you have.
+
+### What the boundary costs, per iteration
+
+An EVO harness is edited constantly. That is the point of
+[the RSI page](evo-rsi-harness.md). So the right way to price a language boundary is per
+change, not per install.
+
+| Step of one experiment | One language (Tau) | Two runtimes (Pi plus a Python bridge) |
+| --- | --- | --- |
+| Add a tool | Write a Python function, pass it in | Write a TS module, or bridge every call that needs your data |
+| Change a hook | Edit Python, rerun | Edit TS, rebuild, restart the RPC process |
+| Score a run | Import the scorer, read the event stream | Convert RPC JSONL to `runs.jsonl` first |
+| Debug a bad turn | One process, one debugger, one stack trace | Decide which side is at fault before you can look |
+| Ship to CI | One image, one lockfile, one Python version | Two runtimes, two lockfiles, two upgrade paths |
+
+None of those rows is fatal. All of them are recurring, and they compound in exactly the
+place where an EVO project cannot afford friction: the loop that measures whether a change
+was worth keeping. A measurement loop that takes an extra twenty minutes of plumbing per
+iteration gets run less often, and a loop that runs less often produces fewer promotions.
+
+There is a second-order cost that is easy to miss. With two languages, your failures split
+into harness bugs and bridge bugs, and the symptom is often identical: the agent stops,
+the event never arrives, the run ends with no result. You spend the first hour of every
+investigation deciding where the bug lives. In one language, the stack trace tells you.
+
+### The honest counter-case
+
+This is not a universal rule, and there are three situations where I would break it.
+
+- **Your team writes TypeScript.** If the people who will edit the harness are TS
+  developers, the boundary costs them nothing and Pi's deeper extension surface is free
+  upside. Do not adopt Python to satisfy a diagram.
+- **You need per-request context rewriting now.** Tau has no `context` hook and no mid-run
+  system prompt replacement. You can `replace_messages()` between runs, which covers the
+  search loop, and it does not cover rewriting the projection inside a turn. If that
+  experiment is the product, Pi in TypeScript is the honest choice, and the bridge is the
+  price of keeping your scorer in Python.
+- **You need the vendor's tools more than you need portability.** Then the Claude Agent SDK
+  is the answer and the language question is secondary, because you are already accepting a
+  bundled CLI, a vendor's terms and a permission system you do not control.
+
+For everything else - a terminal agent that a human drives, a bench that scores it, a
+ledger that prices it - one language wins on the arithmetic above.
+
+### The rule
+
+Put the loop, the tools, the scorer and the bench in one language. If they are in one
+language, an experiment runs in one process, under one debugger, against one lockfile, and
+a change is a diff rather than an integration.
+
+The one-sentence version, if you need to defend the choice in a meeting:
+
+> If the harness and the evaluation are not in the same language, you have two projects.
+
+### What this decides, and what it does not
+
+The Python rule picks Tau over Pi. It does not pick Tau over JAZ, smolagents, OpenAI Agents
+SDK, Pydantic AI or mini-swe-agent, because all of those are already Python. That is why
+the rest of this page exists: the language argument closes the door on one strong
+alternative, and then the layer analysis has to do the remaining work.
+
+It also explains the shape of the recommendation. If the constraint is "one language", the
+bench does not have to be a second framework. The section on expanding Tau instead of
+adopting JAZ is the direct consequence: a ledger, a response cache and a typed return tool,
+written in the same Python as everything else, are cheaper than a second toolchain that
+happens to ship them.
+
 ## Where Tau wins
 
-Four claims that survive scrutiny.
+Five claims that survive scrutiny.
 
 **1. It is the only one that is good at both halves of your requirement.** Human
 interaction and automated runs are different interface problems, and most harnesses solve
@@ -1008,9 +1113,10 @@ summary-generation requests from assistant turns and estimates cost per request.
 artifact is closer to what an EVO project needs than anything else in this comparison,
 because it makes the cost claim inspectable rather than asserted.
 
-One more, smaller: it is Python, it installs with `pixi global install tau-ai`, and it runs
-in the same environment as your data and evaluation code. If your whole stack is Python,
-that is a real reduction in friction, and friction is what kills measurement.
+**5. It is Python end to end.** Not a Python client over a Node process: the loop, the
+tools, the extensions, the session store and the SDK are one language, installable with one
+`pip install tau-ai` in the same environment as your scorer. For a single-language stack
+that is the deciding property rather than a footnote, and it has its own section above.
 
 ## Where Tau loses, and what beats it
 
@@ -1162,10 +1268,11 @@ you.
 
 So the decision is not "Tau or JAZ". It is:
 
-- **One language, one codebase, one deploy:** expand Tau. Write the ledger, write the
-  cache, keep `tasks.jsonl` and `runs.jsonl` exactly as specified. You lose nothing
-  important, and you gain the ability to debug a failing experiment in the same debugger as
-  the harness.
+- **One language, one codebase, one deploy:** expand Tau. This is the option the
+  [language rule](#language-is-a-layer-the-python-only-rule) points at. Write the ledger,
+  write the cache, keep `tasks.jsonl` and `runs.jsonl` exactly as specified. You lose
+  nothing important, and you gain the ability to debug a failing experiment in the same
+  debugger as the harness.
 - **Two languages but a proven bench:** Tau for the shell, JAZ for the bench. You get replay
   and pooled budgets on day one, and you pay for it with a second toolchain and a trace
   format conversion.
@@ -1289,6 +1396,7 @@ Before you commit to a harness, answer these. Any "no" is a stage in the build o
 a reason to switch tools.
 
 - [ ] Can I read the loop, the tools and the session format in one sitting?
+- [ ] Are the loop, the tools, the scorer and the bench in one language?
 - [ ] Does the harness distinguish "one run ended" from "nothing further will happen"?
 - [ ] Can I resume, fork and replay a run without rewriting history?
 - [ ] Does compaction preserve constraints, or only progress?
