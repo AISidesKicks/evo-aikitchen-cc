@@ -1,0 +1,2 @@
+notes = "Tests whether removing the shell changes behaviour. The acceptance check is still the grader."
+tools = ["read", "write", "edit"]
