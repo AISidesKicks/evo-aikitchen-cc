@@ -470,6 +470,67 @@ structured message. If you build a frontend from deltas and never reconcile agai
 A frontend is a `match` on event types. The docs show one in about a dozen lines. That is
 the correct amount of ceremony for a harness extension, and it is why the SDK is credible.
 
+### The SDK is the harness, not a wrapper
+
+This is the detail that decides whether Tau is a tool or a dependency. The Python SDK
+(`AgentHarness` in `tau_agent`) is the same object the Textual TUI drives. It is not a
+client that shells out to the CLI, and it is not a thin adapter over an HTTP API. If the
+TUI can do it, your script can call it.
+
+There are two entry points, and confusing them is the most common mistake:
+
+| You want | Import | You get |
+| --- | --- | --- |
+| A brain inside your own program | `tau_agent.AgentHarness` | The loop, tools, events, queues and cancellation. No config files, no extensions runtime, no TUI. |
+| A full coding environment | `tau_coding.CodingSession` | Everything the CLI has: sessions on disk, project instructions, skills, extensions, trust, tool allow-list. |
+
+The portable config is small enough to quote:
+
+```python
+AgentHarnessConfig(
+    provider, model, system,
+    tools=[],                  # list[AgentTool]
+    max_turns=None,
+    queue_mode="one_at_a_time",  # or "all"
+    session_id=None,
+    before_tool_call=None,     # intercept and rewrite arguments
+    after_tool_call=None,      # rewrite results
+    finish_turn=None,          # host policy: "end" or "continue"
+)
+```
+
+And the surface on `AgentHarness` is: `prompt(text)`, `prompt_message(msg)` and
+`continue_()` returning an async iterator of events; `steer()` and `follow_up()` for
+queued input; `subscribe(listener)` returning an unsubscribe callable; `cancel()`;
+`append_message()` and `replace_messages()`; plus read-only `messages`, `is_running` and
+`queued_messages`.
+
+Three implementation choices make that surface trustworthy for unattended work:
+
+1. **The queue is enforced, not suggested.** `prompt()` raises `RuntimeError` if a run is
+   already active, and the error tells you to use `steer()` or `follow_up()`. You cannot
+   accidentally start two runs on one session.
+2. **Interrupted tool calls are repaired on every run.** `_append_interrupted_tool_results()`
+   runs at the start of each run and again in the `finally` block after a cancel,
+   synthesising error results for dangling tool calls and pushing them to subscribers as
+   well as to the consumer. That is the "session died mid-tool-call" bug, fixed in about
+   twenty lines, and it is why a resumed run does not 400 on provider history validation.
+3. **`finish_turn` is a host callback, not an extension hook.** The coding app decides that
+   a successful `submit_results` call ends the run, and the portable core never learns what
+   `submit_results` is. That is the correct direction of dependency for a harness you plan
+   to score: policy lives above the loop.
+
+For an EVO harness, the split writes itself. `AgentHarness` is what the bench and the
+scorer call, because it has no opinions about your filesystem. `CodingSession` is what CI
+calls, because it has durable sessions and a non-zero exit code on failure. Same core,
+two levels of opinion, one event contract.
+
+What the SDK does not give you, as of 0.4.11: a per-request context rewriting hook, a
+system prompt you can swap mid-run, an enforced dollar budget, or a permission system. It
+gives you `replace_messages()` between runs, `max_turns`, `before_tool_call` and
+`after_tool_call`. That is enough to build all four around it, and not enough to pretend
+they are in it.
+
 ### Sessions, branching, compaction, export
 
 - Append-only JSONL, per working directory, under `~/.tau/sessions/`.
@@ -1054,7 +1115,8 @@ Three pieces:
 2. **JAZ is the experiment bench.** Every candidate change to the harness is expressed as a
    JAZ loop first, with a scoped `BudgetPool`, a `ReturnType`, and `TrajectoryReplay` for
    the deterministic part. It is cheap, it is fast, and it is disposable. You do not need a
-   TUI to find out that a prompt change is worth 4 points.
+   TUI to find out that a prompt change is worth 4 points. See the next subsection if you
+   would rather keep one language.
 3. **One contract between them.** This is the part people skip and then regret.
 
 The contract has three files:
@@ -1079,6 +1141,42 @@ diff plus a score, not a vibe.
 This is also how you get the RSI loop from the other page without a research project. The
 bench proposes, the scorer decides, the shell runs what survived. Nothing in Tau needs to
 know it is being improved.
+
+### If you would rather expand Tau and skip JAZ
+
+Fair question, and the honest answer is that you can. The bench is a place for experiments,
+and `AgentHarness` is a perfectly good place to run them. The only thing JAZ gives you that
+Tau does not is two primitives, and both are small enough to write:
+
+| JAZ primitive | What it does | Tau equivalent you would write |
+| --- | --- | --- |
+| `BudgetPool` | Enforced cost and call budget across the whole recursion tree | A ledger checked before each `prompt()`, plus `max_turns` |
+| `TrajectoryReplay` | Replay saved responses, then go live | A response cache keyed by request hash, in front of the provider |
+| `ReturnType` | Enforce a typed return | A `submit_results` tool with a schema and `terminate=True` |
+| `ConfigOverride` | Swap model, REPL or protocol per call | Construct a second `AgentHarness` with a different config |
+
+The ledger is forty lines. The response cache is harder than it looks, because the key has
+to cover the model, the system prompt, the tool set and the full message list, or your
+replay silently diverges. That is the one piece where JAZ has genuinely done the work for
+you.
+
+So the decision is not "Tau or JAZ". It is:
+
+- **One language, one codebase, one deploy:** expand Tau. Write the ledger, write the
+  cache, keep `tasks.jsonl` and `runs.jsonl` exactly as specified. You lose nothing
+  important, and you gain the ability to debug a failing experiment in the same debugger as
+  the harness.
+- **Two languages but a proven bench:** Tau for the shell, JAZ for the bench. You get replay
+  and pooled budgets on day one, and you pay for it with a second toolchain and a trace
+  format conversion.
+- **One language and a research-grade bench:** skip both and use JAZ everywhere. You will
+  miss the TUI within a week.
+
+The thing not to do is expand Tau in the direction it explicitly does not go yet: per-request
+context rewriting and mid-run prompt replacement. You can `replace_messages()` between runs,
+and that is enough for a search loop. If you find yourself patching `run_agent_loop` to
+rewrite the projection on every turn, stop and either upstream the hook or move that
+experiment to JAZ, because you are now maintaining a fork of a 0.4.x package.
 
 ### What to port, and what not to
 
