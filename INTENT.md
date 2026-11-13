@@ -32,9 +32,10 @@ Plain hyphens only, no em dashes or en dashes.
   scenario corpora, simulated stakeholders, measurement design, ablations, fault
   injection, multi-session shifts, and testing EVO's own claims.
 - `mds/evo-rsi-harness.md` - how to simulate and build a self-improving harness: prompt
-  level RHI, branching search with routing, contract locked infra RSI, the frozen
-  evaluator rule, the three clocks, overfitting curves, guardrails, build order.
-- `README.md` - short overview linking both.
+  level RHI, branching search with routing, contract locked infra RSI, the three audits
+  (RSI tax, statistical gates, task turnover), the frozen evaluator rule, the three clocks,
+  overfitting curves, guardrails, build order.
+- `README.md` - short overview linking the deep dives.
 - `docs/` - static GitHub Pages site, hand-written HTML only.
 
 ## Open questions
