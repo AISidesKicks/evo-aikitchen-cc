@@ -133,10 +133,20 @@ def test_compare_aggregates_repeated_trials_as_pass_k():
     assert paired.cost_a == pytest.approx(0.4)
 
 
+def test_trials_per_task_counts_per_variant_not_across_variants():
+    rows = [
+        {"task_id": "t1", "variant": "baseline", "score": 1.0},
+        {"task_id": "t1", "variant": "strict", "score": 1.0},
+        {"task_id": "t2", "variant": "baseline", "score": 1.0},
+    ]
+    # Two variants on one task is not two trials.
+    assert trials_per_task(rows) == 1
+
+
 def test_trials_per_task_reports_the_largest_count():
     rows = [
-        {"task_id": "t1", "score": 1.0},
-        {"task_id": "t1", "score": 1.0},
-        {"task_id": "t2", "score": 1.0},
+        {"task_id": "t1", "variant": "baseline", "score": 1.0},
+        {"task_id": "t1", "variant": "baseline", "score": 1.0},
+        {"task_id": "t2", "variant": "baseline", "score": 1.0},
     ]
     assert trials_per_task(rows) == 2

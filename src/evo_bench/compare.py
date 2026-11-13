@@ -81,11 +81,16 @@ def _scores(rows: Iterable[Mapping[str, object]]) -> dict[str, float]:
 
 
 def trials_per_task(rows: Iterable[Mapping[str, object]]) -> int:
-    """The largest number of runs recorded for one task in a ledger."""
-    counts: dict[str, int] = {}
+    """The largest number of trials recorded for one task in one variant.
+
+    Counting per task alone would report two trials whenever two variants each
+    ran the task once, which is how a report ends up claiming ``pass^2`` for a
+    single run per configuration.
+    """
+    counts: dict[tuple[str, str], int] = {}
     for row in rows:
-        task_id = str(row["task_id"])
-        counts[task_id] = counts.get(task_id, 0) + 1
+        key = (str(row.get("variant") or "baseline"), str(row["task_id"]))
+        counts[key] = counts.get(key, 0) + 1
     return max(counts.values(), default=0)
 
 
