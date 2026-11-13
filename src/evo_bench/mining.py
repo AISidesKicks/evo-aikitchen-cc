@@ -367,12 +367,26 @@ def mine(
         )
         print(f"  mined {candidate.commit} flips={len(flips):<3} {candidate.subject[:50]}")
 
-    _write_cards(mined, out_dir / "tasks.jsonl")
+    # Cards are relative to the working directory the miner was run from, which
+    # is the bench repository, not the repository being mined.
+    _write_cards(mined, out_dir / "tasks.jsonl", Path.cwd())
     shutil.rmtree(scratch, ignore_errors=True)
     return mined
 
 
-def _write_cards(mined: list[Mined], path: Path) -> None:
+def _relative(path: Path, base: Path) -> str:
+    """Store paths relative to the mined repository when possible.
+
+    Absolute host paths in a task card make the corpus unusable on another
+    machine, and the fixture directory is regenerable anyway.
+    """
+    try:
+        return path.resolve().relative_to(base.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _write_cards(mined: list[Mined], path: Path, base: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for task in mined:
@@ -382,8 +396,8 @@ def _write_cards(mined: list[Mined], path: Path) -> None:
                 "acceptance": task.acceptance,
                 "class": "bugfix",
                 "source": "commit",
-                "fixture": str(task.fixture),
-                "gold": str(task.gold),
+                "fixture": _relative(task.fixture, base),
+                "gold": _relative(task.gold, base),
                 "repo": task.candidate.commit,
                 "difficulty": "medium",
                 "contamination": "public",
