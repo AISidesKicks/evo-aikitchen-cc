@@ -39,6 +39,10 @@ Plain hyphens only, no em dashes or en dashes.
   behind skills and hooks, Tau in depth, JAZ and its StuLife and AppWorld results, five more
   Python harnesses, coverage matrices, where Tau loses, and the operator-shell plus
   experiment-bench architecture.
+- `mds/evo-benchmark-evals.md` - how to know the method worked: the five distances between
+  a benchmark and value, benchmark arithmetic and paired designs, contamination and grader
+  validity, the 2026 benchmark landscape, building an internal bench, production
+  measurement, and the missing experiment that would test EVO itself.
 - `README.md` - short overview linking the deep dives.
 - `docs/` - static GitHub Pages site, hand-written HTML only.
 
@@ -47,7 +51,8 @@ Plain hyphens only, no em dashes or en dashes.
 1. Do published harness gains generalize from web apps to brownfield enterprise code?
 2. Does better specification measurably reduce agent instruction-following failures?
 3. Which metrics survive contact with reality: merged-without-rework, Fix Rate, cost per
-   delivered change, or something else?
+   delivered change, or something else? Working answer in
+   `mds/evo-benchmark-evals.md`.
 4. How much of the current advantage is model capability versus harness design?
 5. What does EVO's "reward results" mean for engineers whose small tasks an agent now
    absorbs?
