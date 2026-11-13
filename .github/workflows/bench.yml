@@ -1,0 +1,51 @@
+name: bench
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0
+        with:
+          pixi-version: latest
+          cache: true
+
+      - name: Environment
+        run: pixi run bench
+
+      - name: Tests
+        run: pixi run test
+
+      - name: No leaked secrets
+        # The scan needs git history to look for a committed key, hence the
+        # full fetch above. It exits non-zero on a hit.
+        run: pixi run secrets
+        env:
+          # No .env in CI, so the scan reports that it has nothing to check.
+          EVO_PROVIDER: fake
+
+  controls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bubblewrap
+        # The sandbox is the boundary for tool execution. Without it the bench
+        # refuses to run a task rather than silently running unsandboxed.
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - uses: prefix-dev/setup-pixi@v0
+        with:
+          pixi-version: latest
+          cache: true
+
+      - name: Gold must pass and null must fail
+        run: pixi run python -m evo_bench control --timeout 120

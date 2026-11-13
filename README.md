@@ -168,6 +168,7 @@ is public, and a rewritten history is a cleanup, not a fix.
 - [x] Task mining from a repository's history
 - [x] Twelve mined tasks from click, validated by gold and null controls
 - [x] Resolution planning, so a corpus size is chosen rather than assumed
+- [x] CI: tests, secret scan and sandboxed controls on every push
 - [ ] Task corpus with 20 real tasks from commits and incidents
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
