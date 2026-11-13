@@ -82,7 +82,7 @@ def _workdir() -> Path:
     return Path(tempfile.mkdtemp(prefix="evo-run-", dir=base))
 
 
-def status(root: Path) -> int:
+def status(root: Path, corpus_path: Path | None = None) -> int:
     print(f"evo_bench {__version__}")
     print(f"root      {root}")
     print(f"TMPDIR    {os.environ.get('TMPDIR', '-')}")
@@ -92,15 +92,35 @@ def status(root: Path) -> int:
     print(f"provider  {os.environ.get('EVO_PROVIDER', 'fake')}")
     print(f"model     {os.environ.get('EVO_MODEL') or '-'}")
 
-    corpus = _find_corpus(root)
+    corpus = corpus_path or _find_corpus(root)
     if corpus is None:
         print("corpus    missing, add benchmarks/tasks.jsonl")
         return 1
+    if not corpus.is_absolute():
+        corpus = root / corpus
 
     tasks = load_tasks(corpus)
     print(f"corpus    {corpus.relative_to(root)} ({len(tasks)} tasks)")
     for name, count in class_counts(tasks).items():
         print(f"  {name:<20} {count}")
+
+    splits = {}
+    for task in tasks:
+        splits[task.split] = splits.get(task.split, 0) + 1
+    print(f"splits    {', '.join(f'{name} {count}' for name, count in sorted(splits.items()))}")
+
+    # The resolution rule belongs on the status line, not in a document nobody
+    # opens before a campaign.
+    item = resolution(len(tasks))
+    paired = (
+        f"{item.paired_effect:.0%}"
+        if item.paired_achievable
+        else "not achievable"
+    )
+    print(
+        f"resolves  {item.independent_effect:.0%} independent, {paired} paired "
+        f"at {item.rate:.0%}"
+    )
 
     runs = root / "runs"
     print(f"runs      {runs} {'present' if runs.exists() else 'missing'}")
@@ -358,7 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         help="project root (default: PIXI_PROJECT_ROOT or the current directory)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("status", help="report the bench inventory and local paths")
+    status_cmd = sub.add_parser("status", help="report the bench inventory and local paths")
+    status_cmd.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
 
     control = sub.add_parser("control", help="run the gold and null controls")
     control.add_argument("--timeout", type=float, default=120.0)
@@ -477,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root).resolve()
 
     if args.command == "status":
-        return status(root)
+        return status(root, args.tasks)
     if args.command == "control":
         return asyncio.run(_controls(root, _load(root, args.tasks), args.timeout))
     if args.command == "run":
