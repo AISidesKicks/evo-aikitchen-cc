@@ -26,8 +26,9 @@ cleanly than the sprint rituals we kept.
 | [EVO in the AI harness era](mds/evo-in-ai-era.md) | The bridge: what the SWE-EVO benchmark measures, how long agents can run, why harnesses matter more than models, an EVO-to-harness mapping, token economics and a working protocol for one agent step |
 | [Building a custom AI harness with EVO principles](mds/evo-in-ai-harness.md) | The design guide: harness evidence from 2026, the ten principles as design rules, a reference architecture, component defaults with measured effects, contracts, budgets, routing and a staged build order |
 | [Simulating the EVO process for harness development](mds/evo-simulation.md) | The measurement protocol: scenario corpora, simulated stakeholders, step cards, run variance, ablation, fault injection, multi-session shifts, cost campaigns and how to test EVO's own claims |
+| [Simulating and building a self-improving EVO harness](mds/evo-rsi-harness.md) | The loop that improves the harness: RHI, branching search and InfraRSI, the frozen-evaluator rule, a reference RSI loop, the three clocks, overfitting curves, guardrails and a staged build order |
 
-Both are research notes, not marketing. Numbers are cited, vendor claims are labeled as
+These are research notes, not marketing. Numbers are cited, vendor claims are labeled as
 vendor claims, and open questions are collected at the end of each document.
 
 ## Repo layout
@@ -61,6 +62,7 @@ empty placeholders.
 - [x] EVO in the AI harness era
 - [x] Harness design guide
 - [x] Simulation protocol
+- [x] Self-improving harness (RSI) guide
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
 - [ ] pixi `default` task that creates `TMPDIR`
