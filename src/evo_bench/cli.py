@@ -168,32 +168,35 @@ async def _run(
             if max_usd is not None and spend >= max_usd:
                 print(f"stopped: spend {spend:.2f} reached the cap {max_usd:.2f}")
                 break
+
             result = await run_task(
-            task,
-            mode="agent",
-            provider=provider,
-            model=model,
-            workdir=_workdir(),
-            base=root,
-            timeout=timeout,
-            variant=variant,
-            variant_name=variant.name if variant else "baseline",
-            max_turns=max_turns,
-            prices=book,
-            trial=trial,
-        )
-        if trace_dir is not None:
-            write_trace(result, root / trace_dir)
-        append(ledger, result.row)
-        spend += float(result.row.get("cost") or 0.0)
-        passed += int(result.passed)
-        label = f"{task.id}" if trials == 1 else f"{task.id} #{trial + 1}"
-        print(
-            f"{label:<30} {'pass' if result.passed else 'fail':<5} "
-            f"turns={result.turns:<3} cost=${result.cost:.4f} {result.wall_clock:.1f}s"
-        )
-        if not result.passed:
-            print(f"  {result.grade.output.strip()[-300:]}")
+                task,
+                mode="agent",
+                provider=provider,
+                model=model,
+                workdir=_workdir(),
+                base=root,
+                timeout=timeout,
+                variant=variant,
+                variant_name=variant.name if variant else "baseline",
+                max_turns=max_turns,
+                prices=book,
+                trial=trial,
+            )
+            if trace_dir is not None:
+                write_trace(result, root / trace_dir)
+            append(ledger, result.row)
+            spend += float(result.row.get("cost") or 0.0)
+            passed += int(result.passed)
+
+            label = task.id if trials == 1 else f"{task.id} #{trial + 1}"
+            print(
+                f"{label:<30} {'pass' if result.passed else 'fail':<5} "
+                f"turns={result.turns:<3} cost=${result.cost:.4f} {result.wall_clock:.1f}s"
+            )
+            if not result.passed:
+                print(f"  {result.grade.output.strip()[-300:]}")
+
     runs = len(selected) * trials
     print(f"\n{passed}/{runs} runs passed, spend ${spend:.4f}, ledger {ledger}")
     return 0
@@ -498,6 +501,7 @@ def main(argv: list[str] | None = None) -> int:
                     max_turns=args.max_turns,
                     trace_dir=args.trace_dir,
                     prices=args.prices,
+                    trials=args.trials,
                 )
             )
         except MissingCredentials as error:
