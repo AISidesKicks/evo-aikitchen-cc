@@ -77,9 +77,15 @@ allow list. It lives in `benchmarks/variants/<name>/`:
 
 ```
 variants/strict/
-  variant.toml    max_turns, model, tools, notes
+  variant.toml    model, tools, max_turns, notes
   system.md       text appended to the base system prompt
 ```
+
+The shipped variants change the prompt one at a time, with no turn-budget change,
+because a variant that changes two things measures neither. The first campaign in
+this repository proved the point: two variants that also cut the turn budget lost
+badly, and every failure landed exactly on its cap. That was the budget, not the
+prompt.
 
 The directory name is the variant's identity, so there is only one source of
 truth. A variant with no files is an exact copy of the baseline, which is a

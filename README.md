@@ -80,7 +80,20 @@ python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
 python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
 python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
 python -m evo_bench report --ledger runs/cycle.jsonl --out runs/report.html
+python -m evo_bench prices --refresh
 ```
+
+Costs come from `benchmarks/prices.toml`, which is a dated price book. Tau reports tokens
+and leaves cost unset, because a harness has no business knowing your negotiated rates, so
+the ledger multiplies tokens by prices you own:
+
+```sh
+python -m evo_bench prices --refresh     # fetch current OpenRouter prices for EVO_MODEL
+```
+
+Every run can also write a transcript with `--trace-dir runs/traces`. The ledger says what
+the score was; the trace says what the model actually did, which is the difference between
+debugging and guessing.
 
 The gate is the decision rule from the docs made executable. It refuses to promote on fewer
 than 20 paired tasks, demands a significant paired difference, caps the cost increase at 20
@@ -143,6 +156,8 @@ is public, and a rewritten history is a cleanup, not a fix.
 - [x] Response cache for cheap replay
 - [x] Variants, cycles and a budget-capped search loop
 - [x] Self-contained HTML run report
+- [x] Real cost accounting from a dated price book
+- [x] Run traces and a first campaign against a live model
 - [ ] Task corpus with 20 real tasks from commits and incidents
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
