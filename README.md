@@ -28,6 +28,7 @@ cleanly than the sprint rituals we kept.
 | [Simulating the EVO process for harness development](mds/evo-simulation.md) | The measurement protocol: scenario corpora, simulated stakeholders, step cards, run variance, ablation, fault injection, multi-session shifts, cost campaigns and how to test EVO's own claims |
 | [Simulating and building a self-improving EVO harness](mds/evo-rsi-harness.md) | The loop that improves the harness: RHI, branching search and InfraRSI, plus the three audits (the RSI tax, statistical gates, coverage churn), the frozen-evaluator rule, a reference RSI loop, the three clocks, overfitting curves, guardrails and a staged build order |
 | [Choosing a custom AI harness: Tau, JAZ and the minimal Python field](mds/evo-custom-ai-harness.md) | The selection guide: why skills and hooks are two of thirteen layers, Tau in depth, JAZ and its published results, five more Python harnesses, coverage matrices, where Tau loses and what beats it, and the operator-shell plus experiment-bench architecture |
+| [Benchmarking and evaluating EVO](mds/evo-benchmark-evals.md) | The instrument check: the five distances between a benchmark and your value, benchmark arithmetic and paired designs, contamination and grader validity, the 2026 benchmark landscape, building an internal bench, what survives in production, and the missing experiment that would test EVO itself |
 
 These are research notes, not marketing. Numbers are cited, vendor claims are labeled as
 vendor claims, and open questions are collected at the end of each document.
@@ -65,6 +66,7 @@ empty placeholders.
 - [x] Simulation protocol
 - [x] Self-improving harness (RSI) guide
 - [x] Custom AI harness comparison (Tau and JAZ)
+- [x] Benchmarking and evaluation guide
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
 - [ ] pixi `default` task that creates `TMPDIR`
