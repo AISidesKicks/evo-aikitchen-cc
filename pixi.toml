@@ -43,6 +43,11 @@ depends-on = ["init"]
 cmd = "python -m evo_bench control"
 description = "Run the gold and null controls over the corpus"
 
+[tasks.secrets]
+depends-on = ["init"]
+cmd = "python -m evo_bench secrets"
+description = "Check that .env secrets are not in tracked files or history"
+
 [dependencies]
 python = "3.12.*"
 huggingface_hub = ">=1"

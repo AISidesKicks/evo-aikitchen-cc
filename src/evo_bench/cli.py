@@ -27,6 +27,7 @@ from evo_bench.ledger import append, read as read_ledger
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.report import write_report
 from evo_bench.runner import run_task
+from evo_bench.secrets import check as check_secrets
 from evo_bench.tasks import Task, class_counts, load_tasks
 from evo_bench.variants import Variant, load_variants
 
@@ -192,6 +193,25 @@ def _gate(
     return 0 if decision.promoted else 1
 
 
+def _secrets(root: Path) -> int:
+    report = check_secrets(root)
+    if report.secrets == 0:
+        print("no secret-named values in .env, nothing to check")
+        return 0
+    print(f"checked {report.secrets} secret value(s) from .env")
+    if report.tracked_hits:
+        for name, keys in sorted(report.tracked_hits.items()):
+            print(f"  LEAK {name}: contains {', '.join(keys)}")
+    if report.history_hits:
+        for key, count in sorted(report.history_hits.items()):
+            print(f"  HISTORY {key}: appears in {count} commit line(s)")
+    if report.clean:
+        print("clean: no secret value appears in a tracked file or in history")
+        return 0
+    print("rotate the key, then remove the value from the file and from history")
+    return 1
+
+
 def _report(
     root: Path, ledger: Path, out: Path, *, title: str, baseline: str | None
 ) -> int:
@@ -336,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
     report_cmd.add_argument("--title", default="EVO bench report")
     report_cmd.add_argument("--baseline", default="baseline")
 
+    sub.add_parser("secrets", help="check that .env secrets are not in tracked files or history")
+
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
 
@@ -379,6 +401,8 @@ def main(argv: list[str] | None = None) -> int:
             title=args.title,
             baseline=args.baseline or None,
         )
+    if args.command == "secrets":
+        return _secrets(root)
     if args.command == "gate":
         labels = tuple(part.strip() for part in args.labels.split(",", 1))
         policy = Policy(

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Reject a commit if a value from .env appears in a tracked file or in history.
+#
+# Installed by scripts/install-hooks.sh. Kept in the repository so the check is
+# reviewable and versioned, rather than living invisible in .git/hooks.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root" || exit 0
+
+python="$root/.pixi/envs/default/bin/python"
+if [ ! -x "$python" ]; then
+    exit 0
+fi
+
+"$python" -m evo_bench secrets
