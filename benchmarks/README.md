@@ -106,6 +106,44 @@ The cycle does not invent variants. Someone, or something, writes a variant
 directory; the cycle measures it fairly. That is the honest division of labour
 until a generator exists, and it keeps every candidate reviewable as a diff.
 
+## Mining a real corpus
+
+The `calc` fixture proves the plumbing. Real tasks come from a repository's own
+history:
+
+```sh
+python -m evo_bench mine --repo /path/to/repo --limit 12
+python -m evo_bench control --tasks benchmarks/mined/tasks.jsonl
+```
+
+A commit becomes a task when it changes both tests and source. The fixture is the
+tree at the parent commit with the *new tests* overlaid, so the tests fail before
+the change and pass after it. The gold solution is the source half of the commit,
+written as a patch. Only the tests that actually flip are graded, because every
+repository has pre-existing failures in any given environment.
+
+Mined cards live in `benchmarks/mined/tasks.jsonl`, with gold patches beside them.
+Fixtures are materialised under `scratch/mined/` and are gitignored: they are
+regenerable and they are large.
+
+Four details decide whether a mined task is real or noise, and all four were bugs
+before they were rules:
+
+1. **The workspace must shadow installed packages.** `PYTHONPATH=src` is part of
+   the acceptance command. Without it, `import click` resolves to site-packages
+   and the agent's edit has no effect on the score.
+2. **Node ids, not files.** Tests are named individually, and parametrised ids can
+   contain quotes, so they are shell-quoted with `shlex.quote`.
+3. **`git apply` must not escape the workspace.** A fixture inside another
+   repository makes git discover the outer one and apply the patch against the
+   wrong root, so the ceiling is pinned to the workspace parent.
+4. **The sandbox workspace is writable.** A read-only mount means the agent cannot
+   edit files through `bash` and pytest cannot write its cache.
+
+The miner keeps a task only if its gold patch makes the named tests pass. The next
+step is `evo_bench control`, which checks the same thing under the sandbox, and
+that is the gate every task must clear before it can affect a decision.
+
 ## Commands
 
 ```sh

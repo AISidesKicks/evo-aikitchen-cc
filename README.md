@@ -81,7 +81,13 @@ python -m evo_bench gate runs/a.jsonl runs/b.jsonl --labels before,after
 python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
 python -m evo_bench report --ledger runs/cycle.jsonl --out runs/report.html
 python -m evo_bench prices --refresh
+python -m evo_bench mine --repo /path/to/repo --limit 12
 ```
+
+A corpus of real tasks comes from a repository's history, not from a fixture you
+invented. `mine` pairs each commit that changes tests and source into a task, with the
+failing tests as the acceptance check and the source half as the gold patch, and keeps
+only the tasks whose gold actually flips them.
 
 Costs come from `benchmarks/prices.toml`, which is a dated price book. Tau reports tokens
 and leaves cost unset, because a harness has no business knowing your negotiated rates, so
@@ -158,6 +164,8 @@ is public, and a rewritten history is a cleanup, not a fix.
 - [x] Self-contained HTML run report
 - [x] Real cost accounting from a dated price book
 - [x] Run traces and a first campaign against a live model
+- [x] Task mining from a repository's history
+- [x] Twelve mined tasks from click, validated by gold and null controls
 - [ ] Task corpus with 20 real tasks from commits and incidents
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
