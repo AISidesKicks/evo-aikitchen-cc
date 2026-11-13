@@ -25,6 +25,7 @@ from evo_bench.cycle import run_cycle, write_summary
 from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
 from evo_bench.mining import mine
+from evo_bench.planning import report as plan_report, resolution, tasks_for
 from evo_bench.pricing import fetch_openrouter_prices, load_prices, write_prices
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.report import write_report
@@ -423,6 +424,13 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("secrets", help="check that .env secrets are not in tracked files or history")
 
+    plan_cmd = sub.add_parser("plan", help="what this corpus can resolve")
+    plan_cmd.add_argument("--tasks", type=Path, default=None, help="count tasks from this corpus")
+    plan_cmd.add_argument("--n", type=int, default=None, help="task count to use instead")
+    plan_cmd.add_argument("--rate", type=float, default=0.8)
+    plan_cmd.add_argument("--discordant", type=float, default=0.1)
+    plan_cmd.add_argument("--effect", type=float, default=None, help="also size the corpus")
+
     mine_cmd = sub.add_parser("mine", help="turn a repository's history into bench tasks")
     mine_cmd.add_argument("--repo", type=Path, required=True)
     mine_cmd.add_argument("--out", type=Path, default=Path("benchmarks/mined"))
@@ -486,6 +494,19 @@ def main(argv: list[str] | None = None) -> int:
         return _secrets(root)
     if args.command == "prices":
         return _prices(root / args.out, refresh=args.refresh, model=args.model)
+    if args.command == "plan":
+        count = args.n
+        if count is None:
+            tasks = _load(root, args.tasks)
+            count = len(tasks)
+        result = resolution(count, rate=args.rate, discordant=args.discordant)
+        print(plan_report(result))
+        if args.effect is not None:
+            needed = tasks_for(args.effect, rate=args.rate, discordant=args.discordant)
+            print()
+            print(f"to resolve {args.effect:.0%}: {needed['independent']} tasks independent, "
+                  f"{needed['paired']} paired")
+        return 0
     if args.command == "mine":
         mined = mine(
             args.repo,
