@@ -16,6 +16,11 @@ Keep all info as very simple HTML pages.
 ## Project layout
 
 - `docs/` - static GitHub overview Page site only, starting at `docs/index.html` (HTML pages and images, nothing dynamic)
+- `src/evo_bench/` - the measurement loop: task cards, ledger, statistics, CLI
+- `benchmarks/` - the task corpus (`tasks.jsonl`), the schema example and the task card rules
+- `tests/` - pytest suite for the bench
+- `scripts/` - pixi activation script and the bubblewrap sandbox wrapper
+- `runs/` - ledger output and run artifacts (gitignored except `.gitkeep`)
 - `scratch/` - logs and artifacts that survive crashes (gitignored, except `.gitkeep`)
 - `README.md` - Main project page for github - technical stuff is in separate mds/
 - `INTENT.md` - project intent and plans
@@ -37,7 +42,15 @@ The pixi Python env has a preinstalled set of tools - suggest expanding it, if n
 ## For temporary work always use $SCRATCH and $TMPDIR
 
 - `$SCRATCH` - scratch disk dir for logs and artifacts that persist through crashes (`$PIXI_PROJECT_ROOT/scratch`, gitignored except `.gitkeep`)
-- `$TMPDIR` - tmpfs dir at `/run/user/$UID/pixi_tmp/$PIXI_PROJECT_NAME` (created by the pixi `default` task)
+- `$TMPDIR` - `/tmp`, which always exists. It cannot point at a directory that pixi has to create, because pixi writes its own temp files before activation scripts run, so a missing `TMPDIR` blocks every command.
+- `$EVO_TMP` - private tmpfs dir at `/run/user/$UID/pixi_tmp/$PIXI_PROJECT_NAME`, created by `scripts/activate.sh` on activation and by `pixi run init`
+
+## Bench commands
+
+- `pixi run default` - create the local dirs and print the paths
+- `pixi run test` - run the pytest suite
+- `pixi run bench` - report the corpus inventory and the Tau version
+- `scripts/sandbox.sh REPO CMD...` - run a command with the repo read-only, a throwaway work dir and no network
 
 ## docs is the home of the GitHub static web page
 

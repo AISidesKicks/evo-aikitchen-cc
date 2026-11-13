@@ -36,9 +36,14 @@ vendor claims, and open questions are collected at the end of each document.
 ## Repo layout
 
 ```
-docs/   static GitHub Pages site (hand-written HTML only)
-mds/    research and technology overviews, linked from this README
-scratch/ logs and artifacts, gitignored except .gitkeep
+docs/        static GitHub Pages site (hand-written HTML only)
+mds/         research and technology overviews, linked from this README
+src/         the measurement loop (evo_bench package)
+benchmarks/  task corpus and the task card rules
+tests/       pytest suite for the bench
+scripts/     pixi activation and the bubblewrap sandbox wrapper
+runs/        ledger output, gitignored except .gitkeep
+scratch/     logs and artifacts, gitignored except .gitkeep
 ```
 
 `docs/` holds nothing dynamic on purpose. GitHub Pages serves it directly, so there is
@@ -53,9 +58,20 @@ pixi shell
 pixi info | grep Name   # should print evo1
 ```
 
-The environment sets `SCRATCH` to `./scratch` and `TMPDIR` to a per-project tmpfs path.
-Secrets live in `.env`, which is local only and never committed. `.env.example` holds
-empty placeholders.
+The environment provides Python 3.12, `tau-ai` 0.4.11, pytest and the local `evo-bench`
+package, installed editable from `src/`.
+
+```sh
+pixi run default   # create the local dirs and print the paths
+pixi run test      # run the test suite
+pixi run bench     # report the corpus inventory and the Tau version
+```
+
+`TMPDIR` points at `/tmp`, because pixi writes its own temp files before activation
+scripts run, so `TMPDIR` can never point at a directory pixi has to create. `EVO_TMP` is
+the private per-project tmpfs directory, created on activation. `SCRATCH` is the
+crash-safe scratch directory. Secrets live in `.env`, which is local only and never
+committed. `.env.example` holds empty placeholders.
 
 ## Status
 
@@ -67,9 +83,12 @@ empty placeholders.
 - [x] Self-improving harness (RSI) guide
 - [x] Custom AI harness comparison (Tau and JAZ)
 - [x] Benchmarking and evaluation guide
+- [x] pixi `default` task that creates the temp and scratch dirs
+- [x] Bench scaffold: task cards, ledger, statistics, sandbox wrapper
+- [ ] Task corpus with 20 real tasks and gold and null controls
+- [ ] Paired A/B runner with a promotion gate
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
-- [ ] pixi `default` task that creates `TMPDIR`
 
 Project intent and open questions are in [INTENT.md](INTENT.md). Working conventions for
 agents and humans are in [AGENTS.md](AGENTS.md).
