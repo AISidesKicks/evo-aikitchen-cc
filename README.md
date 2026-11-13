@@ -82,6 +82,7 @@ python -m evo_bench cycle --candidates strict,smallest-diff --max-usd 5
 python -m evo_bench report --ledger runs/cycle.jsonl --out runs/report.html
 python -m evo_bench prices --refresh
 python -m evo_bench mine --repo /path/to/repo --limit 12
+python -m evo_bench plan --tasks benchmarks/mined/tasks.jsonl
 ```
 
 A corpus of real tasks comes from a repository's history, not from a fixture you
@@ -166,6 +167,7 @@ is public, and a rewritten history is a cleanup, not a fix.
 - [x] Run traces and a first campaign against a live model
 - [x] Task mining from a repository's history
 - [x] Twelve mined tasks from click, validated by gold and null controls
+- [x] Resolution planning, so a corpus size is chosen rather than assumed
 - [ ] Task corpus with 20 real tasks from commits and incidents
 - [ ] Landing page content and navigation
 - [ ] Optimised logo asset
