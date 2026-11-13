@@ -394,6 +394,7 @@ async def _cycle(
     trials: int = 1,
     limit: int | None = None,
     deadline: float | None = None,
+    concurrency: int = 1,
 ) -> int:
     variants = load_variants(root / variants_dir)
     if baseline_name not in variants:
@@ -428,6 +429,7 @@ async def _cycle(
         prices=book,
         trials=trials,
         deadline=deadline,
+        concurrency=concurrency,
     )
 
     path = write_summary(result, root / summary_path, baseline=baseline_name)
@@ -533,6 +535,9 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--max-turns", type=int, default=None)
     cycle_cmd.add_argument("--trials", type=int, default=1)
     cycle_cmd.add_argument("--deadline", type=float, default=None, help="wall-clock seconds per run")
+    cycle_cmd.add_argument(
+        "--concurrency", type=int, default=1, help="runs to execute in parallel"
+    )
     cycle_cmd.add_argument("--trace-dir", type=Path, default=None)
     cycle_cmd.add_argument(
         "--prices",
@@ -718,6 +723,7 @@ def main(argv: list[str] | None = None) -> int:
                     trials=args.trials,
                     limit=args.limit,
                     deadline=args.deadline,
+                    concurrency=args.concurrency,
                 )
             )
         except MissingCredentials as error:

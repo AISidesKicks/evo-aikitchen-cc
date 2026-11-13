@@ -137,6 +137,14 @@ percent. Two honest responses, and this bench uses both:
 The failure to avoid is quoting "no difference in pass rate" from a corpus where
 the pass rate was pinned at 100 percent.
 
+## Concurrency
+
+`--concurrency N` runs N tasks at once. Runs are independent by construction:
+each gets its own workspace copy, its own sandbox and its own trace file, and the
+only shared state is the ledger append, which is serialised by a lock. This is
+the only setting that shortens a campaign without weakening it, since lowering
+the turn budget changes what is being measured.
+
 ## Deadlines and estimates
 
 `--deadline SECONDS` bounds a single run by wall clock. The budget cap stops a

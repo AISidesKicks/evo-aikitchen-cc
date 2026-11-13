@@ -11,6 +11,7 @@ and a report.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -59,6 +60,7 @@ async def run_cycle(
     prices: PriceBook | None = None,
     trials: int = 1,
     deadline: float | None = None,
+    concurrency: int = 1,
 ) -> CycleResult:
     """Run the baseline and every candidate, then gate each candidate."""
     cycle_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -66,41 +68,48 @@ async def run_cycle(
     rules = policy or Policy()
 
     variants = [baseline, *candidates]
-    for variant in variants:
-        for trial in range(trials):
-            for task in tasks:
-                if max_usd is not None and result.spend >= max_usd:
-                    result.aborted = True
-                    result.aborted_reason = (
-                        f"spend {result.spend:.2f} reached the cap {max_usd:.2f}"
-                    )
-                    break
+    jobs = [(variant, task, trial) for variant in variants for trial in range(trials) for task in tasks]
 
-                run: RunResult = await run_task(
-                    task,
-                    mode="agent",
-                    provider=provider,
-                    model=model,
-                    workdir=workdir_for(),
-                    base=base,
-                    timeout=timeout,
-                    variant=variant,
-                    variant_name=variant.name,
-                    max_turns=max_turns,
-                    prices=prices,
-                    trial=trial,
-                    deadline=deadline,
+    # Runs are independent: each gets its own workspace copy, its own sandbox and
+    # its own trace file. Concurrency is therefore a straight wall-clock win, and
+    # the only shared state is the ledger append, which is serialised by a lock.
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    lock = asyncio.Lock()
+
+    async def run_one(variant, task, trial: int) -> None:
+        async with semaphore:
+            if max_usd is not None and result.spend >= max_usd:
+                result.aborted = True
+                result.aborted_reason = (
+                    f"spend {result.spend:.2f} reached the cap {max_usd:.2f}"
                 )
-                if trace_dir is not None:
-                    write_trace(run, trace_dir)
+                return
+
+            run: RunResult = await run_task(
+                task,
+                mode="agent",
+                provider=provider,
+                model=model,
+                workdir=workdir_for(),
+                base=base,
+                timeout=timeout,
+                variant=variant,
+                variant_name=variant.name,
+                max_turns=max_turns,
+                prices=prices,
+                trial=trial,
+                deadline=deadline,
+            )
+
+            async with lock:
                 append(ledger, run.row)
                 result.rows.append(run.row)
                 result.spend += float(run.row.get("cost") or 0.0)
 
-            if result.aborted:
-                break
-        if result.aborted:
-            break
+            if trace_dir is not None:
+                write_trace(run, trace_dir)
+
+    await asyncio.gather(*(run_one(*job) for job in jobs))
 
     baseline_rows = result.by_variant(baseline.name)
     for variant in candidates:

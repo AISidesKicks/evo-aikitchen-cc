@@ -221,3 +221,25 @@ async def test_cycle_stops_at_the_budget_cap(tmp_path):
     assert result.aborted
     assert result.rows == []
     assert "cap" in result.aborted_reason
+
+
+async def test_concurrency_runs_every_job_and_keeps_every_row(tmp_path):
+    tasks = make_corpus(tmp_path, 3)
+    provider = NumberWriterProvider(marker="Before you stop")
+
+    result = await run_cycle(
+        tasks,
+        baseline=Variant(name="baseline"),
+        candidates=[Variant(name="strict", system_addendum="Before you stop, verify.")],
+        provider=provider,
+        model="fake",
+        ledger=tmp_path / "cycle.jsonl",
+        workdir_for=workdir,
+        policy=Policy(min_tasks=3),
+        base=tmp_path,
+        concurrency=3,
+    )
+
+    assert len(result.rows) == 6
+    assert len(list((tmp_path / "cycle.jsonl").read_text().splitlines())) == 6
+    assert result.decisions["strict"].paired.b_only == 3
