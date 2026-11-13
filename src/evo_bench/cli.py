@@ -359,8 +359,24 @@ async def _calibrate(
     deadline: float | None,
     headroom: float,
     write: bool,
+    from_ledger: Path | None = None,
 ) -> int:
     """Run the baseline at a generous ceiling and record the turns each task used."""
+    if from_ledger is not None:
+        rows = list(read_ledger(root / from_ledger))
+        if not rows:
+            print(f"no rows in {from_ledger}")
+            return 1
+        calibrations = summarise_calibration(rows, headroom=headroom)
+        print(calibrate_report(calibrations))
+        changes = apply_calibration(root / tasks_path, calibrations, dry_run=not write)
+        print(
+            f"\nupdated {len(changes)} task budget(s) in {tasks_path}"
+            if write
+            else "\ndry run: pass --write to update the cards"
+        )
+        return 0
+
     provider = build_provider(provider_name)
     book = load_prices(DEFAULT_PRICES) if Path(DEFAULT_PRICES).exists() else None
 
@@ -633,6 +649,9 @@ def main(argv: list[str] | None = None) -> int:
     calibrate_cmd.add_argument("--deadline", type=float, default=300.0)
     calibrate_cmd.add_argument("--headroom", type=float, default=1.5)
     calibrate_cmd.add_argument("--limit", type=int, default=None)
+    calibrate_cmd.add_argument(
+        "--from-ledger", type=Path, default=None, help="apply budgets from an existing ledger"
+    )
     calibrate_cmd.add_argument("--write", action="store_true", help="update the task cards")
 
     estimate_cmd = sub.add_parser("estimate", help="cost a campaign before running it")
@@ -747,6 +766,7 @@ def main(argv: list[str] | None = None) -> int:
                     deadline=args.deadline,
                     headroom=args.headroom,
                     write=args.write,
+                    from_ledger=args.from_ledger,
                 )
             )
         except MissingCredentials as error:
