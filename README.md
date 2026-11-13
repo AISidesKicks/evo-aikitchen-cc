@@ -83,6 +83,7 @@ python -m evo_bench report --ledger runs/cycle.jsonl --out runs/report.html
 python -m evo_bench prices --refresh
 python -m evo_bench mine --repo /path/to/repo --limit 12
 python -m evo_bench plan --tasks benchmarks/mined/tasks.jsonl
+python -m evo_bench run --trials 3 --limit 5   # reliability, not luck
 ```
 
 A corpus of real tasks comes from a repository's history, not from a fixture you
