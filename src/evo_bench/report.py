@@ -49,6 +49,7 @@ class VariantStats:
     cost: float
     delta: float = 0.0
     p_value: float = 1.0
+    truncated: int = 0
 
     @property
     def rate(self) -> float:
@@ -101,10 +102,12 @@ def summarise(
         scores = [cells.get((name, task), 0.0) for task in tasks]
         passes = sum(1 for score in scores if score >= 1.0)
         low, high = wilson_interval(passes, len(tasks)) if tasks else (0.0, 0.0)
-        cost = sum(
-            float(row.get("cost") or 0.0)
-            for row in rows
-            if str(row.get("variant") or "baseline") == name
+        variant_rows = [
+            row for row in rows if str(row.get("variant") or "baseline") == name
+        ]
+        cost = sum(float(row.get("cost") or 0.0) for row in variant_rows)
+        truncated = sum(
+            1 for row in variant_rows if str(row.get("exit_reason")) == "max_turns"
         )
         delta = 0.0
         p_value = 1.0
@@ -125,6 +128,7 @@ def summarise(
                 cost=cost,
                 delta=delta,
                 p_value=p_value,
+                truncated=truncated,
             )
         )
     return stats
@@ -134,7 +138,8 @@ def _summary_table(stats: Iterable[VariantStats], baseline: str | None) -> str:
     head = (
         "<tr><th>Variant</th><th class=\"num\">Pass</th><th class=\"num\">Rate</th>"
         "<th class=\"num\">95% CI</th><th class=\"num\">Cost</th>"
-        "<th class=\"num\">Delta</th><th class=\"num\">p</th></tr>"
+        "<th class=\"num\">Delta</th><th class=\"num\">p</th>"
+        "<th class=\"num\">Capped</th></tr>"
     )
     body = []
     for item in stats:
@@ -149,6 +154,7 @@ def _summary_table(stats: Iterable[VariantStats], baseline: str | None) -> str:
             f"<td class=\"num\">${item.cost:.4f}</td>"
             f"<td class=\"num\">{delta}</td>"
             f"<td class=\"num\">{p_value}</td>"
+            f"<td class=\"num\">{item.truncated}</td>"
             "</tr>"
         )
     return f"<table>{head}{''.join(body)}</table>"

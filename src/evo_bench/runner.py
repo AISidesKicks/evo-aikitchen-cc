@@ -126,6 +126,10 @@ async def run_task(
     cache_write = 0
     trace: list[dict] = []
 
+    effective_max_turns = (
+        variant.max_turns if variant and variant.max_turns else None
+    ) or max_turns or task.budget_turns
+
     if mode == "gold":
         if not task.gold:
             raise ValueError(f"task {task.id} has no gold patch")
@@ -141,9 +145,7 @@ async def run_task(
             model=variant.model if variant and variant.model else model,
             system=system,
             tools=tools,
-            max_turns=(variant.max_turns if variant and variant.max_turns else None)
-            or max_turns
-            or task.budget_turns,
+            max_turns=effective_max_turns,
         )
         agent = AgentHarness(config)
         async for event in agent.prompt(task.prompt):
@@ -197,7 +199,11 @@ async def run_task(
         wall_clock=round(elapsed, 3),
         turns=turns,
         tool_calls=tool_calls,
-        exit_reason="graded",
+        # A run that hit the turn cap did not finish. Scoring it as a plain
+        # failure hides the difference between "wrong" and "out of budget", and
+        # that difference decides whether a comparison is measuring quality or
+        # speed.
+        exit_reason="max_turns" if turns >= effective_max_turns else "graded",
         score=result.score,
         grader_version="acceptance-v1",
     )

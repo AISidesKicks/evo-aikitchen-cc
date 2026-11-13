@@ -150,3 +150,35 @@ async def test_bash_tool_cannot_write_outside_the_workspace(tmp_path):
     result = await bash.execute("call-1", {"command": "touch /work/../escaped.txt"})
 
     assert result.details["exit_code"] != 0 or not (tmp_path.parent / "escaped.txt").exists()
+
+
+async def test_a_run_that_hits_the_turn_cap_is_flagged():
+    """Truncation must be visible, not silently scored as a plain failure."""
+    task = TASKS["calc-divide-zero"]
+
+    class LoopProvider:
+        def stream_response(self, *, model, system, messages, tools, signal=None, session_id=None):
+            message = AssistantMessage(
+                content=[ToolCall(id="c", name="bash", arguments={"command": "true"})],
+                stop_reason="toolUse",
+            )
+            stream = [AssistantDoneEvent(reason="toolUse", message=message)]
+
+            async def iterator():
+                for event in stream:
+                    yield event
+
+            return iterator()
+
+    result = await run_task(
+        task,
+        mode="agent",
+        provider=LoopProvider(),
+        model="fake",
+        workdir=workdir(),
+        base=ROOT,
+        max_turns=3,
+    )
+
+    assert result.row["exit_reason"] == "max_turns"
+    assert result.turns >= 3

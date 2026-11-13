@@ -106,6 +106,19 @@ The cycle does not invent variants. Someone, or something, writes a variant
 directory; the cycle measures it fairly. That is the honest division of labour
 until a generator exists, and it keeps every candidate reviewable as a diff.
 
+## Truncated runs
+
+A run that stops at the turn cap is recorded with `exit_reason = max_turns`, not
+`graded`. The distinction matters: a truncated run did not fail, it ran out of
+budget, and a comparison made mostly of truncated runs measures turn efficiency
+rather than quality. The gate refuses to decide when more than half the runs were
+capped, and the report counts them per variant.
+
+This came from a real campaign on three mined tasks: after twelve turns the
+baseline had 0/3 and the `strict` variant 2/3, and every single run ended
+mid-tool-call. The tempting reading was "the stricter prompt helps". The correct
+reading was "twelve turns is fewer than these tasks need".
+
 ## Trials and reliability
 
 `--trials k` runs each task k times, and both `compare` and the report aggregate

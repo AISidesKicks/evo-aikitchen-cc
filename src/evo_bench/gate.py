@@ -72,6 +72,15 @@ def _train_rows(rows: Iterable[Mapping[str, object]]) -> list[Mapping[str, objec
     return [row for row in rows if str(row.get("split") or "train") != "holdout"]
 
 
+def truncated_share(rows: Iterable[Mapping[str, object]]) -> float:
+    """Share of runs that stopped at the turn cap instead of finishing."""
+    rows = list(rows)
+    if not rows:
+        return 0.0
+    capped = sum(1 for row in rows if str(row.get("exit_reason")) == "max_turns")
+    return capped / len(rows)
+
+
 def cost_per_success(paired: Paired, cost: float, wins: int) -> float:
     """Cost divided by successes, or infinity when nothing succeeded."""
     return cost / wins if wins else float("inf")
@@ -91,6 +100,20 @@ def evaluate(
 
     paired = compare(_train_rows(baseline_rows), _train_rows(candidate_rows))
     reasons: list[str] = []
+
+    truncated = max(
+        truncated_share(_train_rows(baseline_rows)),
+        truncated_share(_train_rows(candidate_rows)),
+    )
+    if truncated > 0.5:
+        return Decision(
+            verdict=INCONCLUSIVE,
+            reasons=(
+                f"{truncated:.0%} of runs stopped at the turn cap",
+                "raise the budget before reading anything into the difference",
+            ),
+            paired=paired,
+        )
 
     if paired.tasks < rules.min_tasks:
         return Decision(
