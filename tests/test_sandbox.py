@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from evo_bench.compare import compare, report
+from evo_bench.compare import compare, report, trials_per_task
 from evo_bench.sandbox import Sandbox, SandboxUnavailable
 
 
@@ -107,3 +107,36 @@ def test_report_mentions_the_verdict_and_the_interval():
     assert "mcnemar p" in text
     assert "verdict" in text
     assert "95% CI" in text
+
+
+def test_compare_aggregates_repeated_trials_as_pass_k():
+    """A task only counts when every trial passed."""
+    a = [
+        {"task_id": "t1", "score": 1.0, "cost": 0.1},
+        {"task_id": "t1", "score": 0.0, "cost": 0.1},
+        {"task_id": "t2", "score": 1.0, "cost": 0.1},
+        {"task_id": "t2", "score": 1.0, "cost": 0.1},
+    ]
+    b = [
+        {"task_id": "t1", "score": 1.0, "cost": 0.1},
+        {"task_id": "t1", "score": 1.0, "cost": 0.1},
+        {"task_id": "t2", "score": 1.0, "cost": 0.1},
+        {"task_id": "t2", "score": 1.0, "cost": 0.1},
+    ]
+
+    paired = compare(a, b)
+
+    # t1 is unreliable in A, so A scores 0 on it under pass^2.
+    assert paired.tasks == 2
+    assert paired.a_only == 0
+    assert paired.b_only == 1
+    assert paired.cost_a == pytest.approx(0.4)
+
+
+def test_trials_per_task_reports_the_largest_count():
+    rows = [
+        {"task_id": "t1", "score": 1.0},
+        {"task_id": "t1", "score": 1.0},
+        {"task_id": "t2", "score": 1.0},
+    ]
+    assert trials_per_task(rows) == 2

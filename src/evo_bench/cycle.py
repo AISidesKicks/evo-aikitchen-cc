@@ -57,6 +57,7 @@ async def run_cycle(
     max_turns: int | None = None,
     trace_dir: str | Path | None = None,
     prices: PriceBook | None = None,
+    trials: int = 1,
 ) -> CycleResult:
     """Run the baseline and every candidate, then gate each candidate."""
     cycle_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -65,33 +66,37 @@ async def run_cycle(
 
     variants = [baseline, *candidates]
     for variant in variants:
-        for task in tasks:
-            if max_usd is not None and result.spend >= max_usd:
-                result.aborted = True
-                result.aborted_reason = (
-                    f"spend {result.spend:.2f} reached the cap {max_usd:.2f}"
+        for trial in range(trials):
+            for task in tasks:
+                if max_usd is not None and result.spend >= max_usd:
+                    result.aborted = True
+                    result.aborted_reason = (
+                        f"spend {result.spend:.2f} reached the cap {max_usd:.2f}"
+                    )
+                    break
+
+                run: RunResult = await run_task(
+                    task,
+                    mode="agent",
+                    provider=provider,
+                    model=model,
+                    workdir=workdir_for(),
+                    base=base,
+                    timeout=timeout,
+                    variant=variant,
+                    variant_name=variant.name,
+                    max_turns=max_turns,
+                    prices=prices,
+                    trial=trial,
                 )
+                if trace_dir is not None:
+                    write_trace(run, trace_dir)
+                append(ledger, run.row)
+                result.rows.append(run.row)
+                result.spend += float(run.row.get("cost") or 0.0)
+
+            if result.aborted:
                 break
-
-            run: RunResult = await run_task(
-                task,
-                mode="agent",
-                provider=provider,
-                model=model,
-                workdir=workdir_for(),
-                base=base,
-                timeout=timeout,
-                variant=variant,
-                variant_name=variant.name,
-                max_turns=max_turns,
-                prices=prices,
-            )
-            if trace_dir is not None:
-                write_trace(run, trace_dir)
-            append(ledger, run.row)
-            result.rows.append(run.row)
-            result.spend += float(run.row.get("cost") or 0.0)
-
         if result.aborted:
             break
 

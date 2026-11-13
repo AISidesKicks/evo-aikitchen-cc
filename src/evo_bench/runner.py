@@ -96,6 +96,7 @@ async def run_task(
     variant: Variant | None = None,
     variant_name: str = "baseline",
     prices: PriceBook | None = None,
+    trial: int = 0,
 ) -> RunResult:
     """Run one task and grade it."""
     if mode not in {"agent", "gold", "null"}:
@@ -183,6 +184,7 @@ async def run_task(
         task_class=task.task_class,
         split=task.split,
         variant=variant_name,
+        trial=trial,
         harness=harness,
         harness_version=harness_version,
         model=model,

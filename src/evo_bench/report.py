@@ -17,7 +17,7 @@ from html import escape
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from evo_bench.compare import compare
+from evo_bench.compare import compare, trials_per_task
 from evo_bench.stats import wilson_interval
 
 CSS = """
@@ -70,14 +70,23 @@ def _variant_order(rows: Sequence[Mapping[str, object]], baseline: str | None) -
 def _matrix(
     rows: Sequence[Mapping[str, object]], variants: Sequence[str]
 ) -> tuple[list[str], dict[tuple[str, str], float]]:
+    """Build the pass matrix, aggregating repeated trials as pass^k.
+
+    A cell is a pass only when every trial for that task passed, so the report
+    answers the reliability question and not the luck question.
+    """
     tasks: list[str] = []
-    cells: dict[tuple[str, str], float] = {}
+    seen: dict[tuple[str, str], list[float]] = {}
     for row in rows:
         task_id = str(row["task_id"])
         variant = str(row.get("variant") or "baseline")
         if task_id not in tasks:
             tasks.append(task_id)
-        cells[(variant, task_id)] = float(row.get("score") or 0.0)
+        seen.setdefault((variant, task_id), []).append(float(row.get("score") or 0.0))
+    cells = {
+        key: 1.0 if all(score >= 1.0 for score in scores) else 0.0
+        for key, scores in seen.items()
+    }
     return tasks, cells
 
 
@@ -183,9 +192,11 @@ def build_report(
     )
     dates = sorted({str(row.get("date"))[:10] for row in rows if row.get("date")})
 
+    trials = trials_per_task(rows)
     meta = [
         f"{len(rows)} runs",
         f"{len(tasks)} tasks",
+        f"pass^{trials} aggregation",
         f"{len(variants)} variants",
         f"${spend:.4f}",
     ]

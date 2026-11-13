@@ -63,12 +63,30 @@ class Paired:
 
 
 def _scores(rows: Iterable[Mapping[str, object]]) -> dict[str, float]:
-    """Reduce ledger rows to one score per task, last row wins."""
-    scores: dict[str, float] = {}
+    """Reduce ledger rows to one score per task.
+
+    Repeated trials aggregate as ``pass^k``: a task counts only when every trial
+    passed. That is the conservative reading, and it is the one that matches the
+    question a promotion gate asks, which is whether the variant is reliable and
+    not whether it can succeed once.
+    """
+    trials: dict[str, list[float]] = {}
     for row in rows:
         task_id = str(row["task_id"])
-        scores[task_id] = float(row.get("score") or 0.0)
-    return scores
+        trials.setdefault(task_id, []).append(float(row.get("score") or 0.0))
+    return {
+        task_id: 1.0 if all(score >= 1.0 for score in scores) else 0.0
+        for task_id, scores in trials.items()
+    }
+
+
+def trials_per_task(rows: Iterable[Mapping[str, object]]) -> int:
+    """The largest number of runs recorded for one task in a ledger."""
+    counts: dict[str, int] = {}
+    for row in rows:
+        task_id = str(row["task_id"])
+        counts[task_id] = counts.get(task_id, 0) + 1
+    return max(counts.values(), default=0)
 
 
 def compare(

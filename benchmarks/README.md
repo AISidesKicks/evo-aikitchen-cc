@@ -106,6 +106,16 @@ The cycle does not invent variants. Someone, or something, writes a variant
 directory; the cycle measures it fairly. That is the honest division of labour
 until a generator exists, and it keeps every candidate reviewable as a diff.
 
+## Trials and reliability
+
+`--trials k` runs each task k times, and both `compare` and the report aggregate
+as `pass^k`: a task counts only when every trial passed. A variant that succeeds
+two times in three is not a 67 percent variant for unattended work.
+
+`--trials` disables the response cache on purpose. Replaying a stored answer for
+every trial reports perfect reliability, which is the opposite of what a trial is
+for.
+
 ## Mining a real corpus
 
 The `calc` fixture proves the plumbing. Real tasks come from a repository's own

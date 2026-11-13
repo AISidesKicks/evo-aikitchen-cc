@@ -56,6 +56,19 @@ def _find_corpus(root: Path) -> Path | None:
     return None
 
 
+def _cache_or_none(cache: Path | None, trials: int) -> Path | None:
+    """Trials and a response cache do not mix.
+
+    Replaying a stored answer for every trial reports perfect reliability, which
+    is the opposite of what a trial is for. When more than one trial is asked
+    for, the cache is dropped and the caller is told why.
+    """
+    if cache is not None and trials > 1:
+        print("note: --trials > 1 disables the response cache, replay would fake reliability")
+        return None
+    return cache
+
+
 def _load(root: Path, corpus: Path | None = None) -> list[Task]:
     path = corpus or _find_corpus(root)
     if path is None:
@@ -140,8 +153,10 @@ async def _run(
     max_turns: int | None = None,
     trace_dir: Path | None = None,
     prices: Path | None = None,
+    trials: int = 1,
 ) -> int:
     provider = build_provider(provider_name)
+    cache = _cache_or_none(cache, trials)
     if cache is not None:
         provider = CachingProvider(provider, ResponseCache(cache))
     book = load_prices(prices) if prices is not None else None
@@ -149,10 +164,11 @@ async def _run(
     passed = 0
     spend = 0.0
     for task in selected:
-        if max_usd is not None and spend >= max_usd:
-            print(f"stopped: spend {spend:.2f} reached the cap {max_usd:.2f}")
-            break
-        result = await run_task(
+        for trial in range(trials):
+            if max_usd is not None and spend >= max_usd:
+                print(f"stopped: spend {spend:.2f} reached the cap {max_usd:.2f}")
+                break
+            result = await run_task(
             task,
             mode="agent",
             provider=provider,
@@ -164,19 +180,22 @@ async def _run(
             variant_name=variant.name if variant else "baseline",
             max_turns=max_turns,
             prices=book,
+            trial=trial,
         )
         if trace_dir is not None:
             write_trace(result, root / trace_dir)
         append(ledger, result.row)
         spend += float(result.row.get("cost") or 0.0)
         passed += int(result.passed)
+        label = f"{task.id}" if trials == 1 else f"{task.id} #{trial + 1}"
         print(
-            f"{task.id:<26} {'pass' if result.passed else 'fail':<5} "
+            f"{label:<30} {'pass' if result.passed else 'fail':<5} "
             f"turns={result.turns:<3} cost=${result.cost:.4f} {result.wall_clock:.1f}s"
         )
         if not result.passed:
             print(f"  {result.grade.output.strip()[-300:]}")
-    print(f"\n{passed}/{len(selected)} passed, spend ${spend:.4f}, ledger {ledger}")
+    runs = len(selected) * trials
+    print(f"\n{passed}/{runs} runs passed, spend ${spend:.4f}, ledger {ledger}")
     return 0
 
 
@@ -280,6 +299,7 @@ async def _cycle(
     max_turns: int | None = None,
     trace_dir: Path | None = None,
     prices: Path | None = None,
+    trials: int = 1,
 ) -> int:
     variants = load_variants(root / variants_dir)
     if baseline_name not in variants:
@@ -292,6 +312,7 @@ async def _cycle(
         raise SystemExit(f"unknown candidates: {', '.join(missing)}")
 
     provider = build_provider(provider_name)
+    cache = _cache_or_none(cache, trials)
     if cache is not None:
         provider = CachingProvider(provider, ResponseCache(cache))
     book = load_prices(prices) if prices is not None else None
@@ -311,6 +332,7 @@ async def _cycle(
         max_turns=max_turns,
         trace_dir=trace_dir,
         prices=book,
+        trials=trials,
     )
 
     path = write_summary(result, root / summary_path, baseline=baseline_name)
@@ -349,6 +371,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--timeout", type=float, default=300.0)
     run.add_argument("--limit", type=int, default=None)
     run.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
+    run.add_argument("--trials", type=int, default=1, help="repeated runs per task")
     run.add_argument(
         "--cache",
         type=Path,
@@ -403,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--cache", type=Path, default=None)
     cycle_cmd.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
     cycle_cmd.add_argument("--max-turns", type=int, default=None)
+    cycle_cmd.add_argument("--trials", type=int, default=1)
     cycle_cmd.add_argument("--trace-dir", type=Path, default=None)
     cycle_cmd.add_argument(
         "--prices",
@@ -561,6 +585,7 @@ def main(argv: list[str] | None = None) -> int:
                     max_turns=args.max_turns,
                     trace_dir=(root / args.trace_dir) if args.trace_dir else None,
                     prices=args.prices,
+                    trials=args.trials,
                 )
             )
         except MissingCredentials as error:
