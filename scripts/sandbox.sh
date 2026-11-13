@@ -34,9 +34,20 @@ for path in /usr /bin /sbin /lib /lib64 /etc/alternatives; do
     fi
 done
 
+# The repository is mounted read-only, so a secret file inside it would still be
+# readable. Mask the usual local secret files with an empty device. This is a
+# second line of defence: the first is keeping secrets out of the repo.
+masks=()
+for name in .env .env.local .env.production .netrc .pypirc; do
+    if [ -e "$repo/$name" ]; then
+        masks+=(--ro-bind /dev/null "/work/$name")
+    fi
+done
+
 bwrap \
     "${binds[@]}" \
     --ro-bind "$repo" /work \
+    "${masks[@]}" \
     --bind "$work" /tmp \
     --dev /dev \
     --proc /proc \
