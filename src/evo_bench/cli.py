@@ -24,6 +24,7 @@ from evo_bench.compare import compare, report
 from evo_bench.cycle import run_cycle, write_summary
 from evo_bench.gate import Policy, evaluate, report as gate_report
 from evo_bench.ledger import append, read as read_ledger
+from evo_bench.mining import mine
 from evo_bench.pricing import fetch_openrouter_prices, load_prices, write_prices
 from evo_bench.providers import MissingCredentials, build as build_provider
 from evo_bench.report import write_report
@@ -54,11 +55,11 @@ def _find_corpus(root: Path) -> Path | None:
     return None
 
 
-def _load(root: Path) -> list[Task]:
-    corpus = _find_corpus(root)
-    if corpus is None:
+def _load(root: Path, corpus: Path | None = None) -> list[Task]:
+    path = corpus or _find_corpus(root)
+    if path is None:
         raise SystemExit(f"no task corpus: add {DEFAULT_TASKS}")
-    return load_tasks(corpus)
+    return load_tasks(path if path.is_absolute() else root / path)
 
 
 def _workdir() -> Path:
@@ -334,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
 
     control = sub.add_parser("control", help="run the gold and null controls")
     control.add_argument("--timeout", type=float, default=120.0)
+    control.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
 
     run = sub.add_parser("run", help="run the agent over the corpus")
     run.add_argument(
@@ -345,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--ledger", type=Path, default=Path(DEFAULT_LEDGER))
     run.add_argument("--timeout", type=float, default=300.0)
     run.add_argument("--limit", type=int, default=None)
+    run.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
     run.add_argument(
         "--cache",
         type=Path,
@@ -397,6 +400,7 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--max-usd", type=float, default=None)
     cycle_cmd.add_argument("--timeout", type=float, default=300.0)
     cycle_cmd.add_argument("--cache", type=Path, default=None)
+    cycle_cmd.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
     cycle_cmd.add_argument("--max-turns", type=int, default=None)
     cycle_cmd.add_argument("--trace-dir", type=Path, default=None)
     cycle_cmd.add_argument(
@@ -419,6 +423,14 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("secrets", help="check that .env secrets are not in tracked files or history")
 
+    mine_cmd = sub.add_parser("mine", help="turn a repository's history into bench tasks")
+    mine_cmd.add_argument("--repo", type=Path, required=True)
+    mine_cmd.add_argument("--out", type=Path, default=Path("benchmarks/mined"))
+    mine_cmd.add_argument("--fixtures", type=Path, default=Path("scratch/mined"))
+    mine_cmd.add_argument("--limit", type=int, default=20)
+    mine_cmd.add_argument("--scan", type=int, default=400)
+    mine_cmd.add_argument("--holdout-every", type=int, default=5)
+
     prices_cmd = sub.add_parser("prices", help="read or refresh the model price book")
     prices_cmd.add_argument("--out", type=Path, default=Path(DEFAULT_PRICES))
     prices_cmd.add_argument("--refresh", action="store_true", help="fetch from OpenRouter")
@@ -430,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         return status(root)
     if args.command == "control":
-        return asyncio.run(_controls(root, _load(root), args.timeout))
+        return asyncio.run(_controls(root, _load(root, args.tasks), args.timeout))
     if args.command == "run":
         try:
             variant = None
@@ -442,7 +454,7 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(
                 _run(
                     root,
-                    _load(root),
+                    _load(root, args.tasks),
                     provider_name=args.provider,
                     model=args.model,
                     ledger=args.ledger,
@@ -474,6 +486,17 @@ def main(argv: list[str] | None = None) -> int:
         return _secrets(root)
     if args.command == "prices":
         return _prices(root / args.out, refresh=args.refresh, model=args.model)
+    if args.command == "mine":
+        mined = mine(
+            args.repo,
+            out=args.out,
+            fixtures=args.fixtures,
+            limit=args.limit,
+            scan=args.scan,
+            holdout_every=args.holdout_every,
+        )
+        print(f"\n{len(mined)} task(s) written to {args.out / 'tasks.jsonl'}")
+        return 0 if mined else 1
     if args.command == "gate":
         labels = tuple(part.strip() for part in args.labels.split(",", 1))
         policy = Policy(
@@ -502,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(
                 _cycle(
                     root,
-                    _load(root),
+                    _load(root, args.tasks),
                     variants_dir=args.variants_dir,
                     baseline_name=args.baseline,
                     candidate_names=names,
