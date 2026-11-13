@@ -122,6 +122,20 @@ two variants at thirty turns gave 3/3 and 3/3, delta zero, exact McNemar p = 1.0
 with every run finishing rather than being capped. The gain was the budget, not
 the prompt.
 
+## Deadlines and estimates
+
+`--deadline SECONDS` bounds a single run by wall clock. The budget cap stops a
+campaign between tasks, which is too late for one run that will not stop; a run
+that hits the deadline is recorded with `exit_reason = deadline`.
+
+`evo_bench estimate` costs a campaign before it starts, using the token averages
+observed in a previous ledger rather than a guess:
+
+```sh
+python -m evo_bench estimate --tasks benchmarks/mined/tasks.jsonl \
+    --candidates 1 --ledger runs/click24.jsonl
+```
+
 ## Trials and reliability
 
 `--trials k` runs each task k times, and both `compare` and the report aggregate

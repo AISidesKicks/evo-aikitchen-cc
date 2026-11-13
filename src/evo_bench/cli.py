@@ -195,6 +195,7 @@ async def _run(
     trace_dir: Path | None = None,
     prices: Path | None = None,
     trials: int = 1,
+    deadline: float | None = None,
 ) -> int:
     provider = build_provider(provider_name)
     cache = _cache_or_none(cache, trials)
@@ -223,6 +224,7 @@ async def _run(
                 max_turns=max_turns,
                 prices=book,
                 trial=trial,
+                deadline=deadline,
             )
             if trace_dir is not None:
                 write_trace(result, root / trace_dir)
@@ -391,6 +393,7 @@ async def _cycle(
     prices: Path | None = None,
     trials: int = 1,
     limit: int | None = None,
+    deadline: float | None = None,
 ) -> int:
     variants = load_variants(root / variants_dir)
     if baseline_name not in variants:
@@ -424,6 +427,7 @@ async def _cycle(
         trace_dir=trace_dir,
         prices=book,
         trials=trials,
+        deadline=deadline,
     )
 
     path = write_summary(result, root / summary_path, baseline=baseline_name)
@@ -468,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
         "--split", default=None, choices=["train", "holdout", "all"], help="filter by split"
     )
     run.add_argument("--trials", type=int, default=1, help="repeated runs per task")
+    run.add_argument("--deadline", type=float, default=None, help="wall-clock seconds per run")
     run.add_argument(
         "--cache",
         type=Path,
@@ -527,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--limit", type=int, default=None, help="use only the first N tasks")
     cycle_cmd.add_argument("--max-turns", type=int, default=None)
     cycle_cmd.add_argument("--trials", type=int, default=1)
+    cycle_cmd.add_argument("--deadline", type=float, default=None, help="wall-clock seconds per run")
     cycle_cmd.add_argument("--trace-dir", type=Path, default=None)
     cycle_cmd.add_argument(
         "--prices",
@@ -610,6 +616,7 @@ def main(argv: list[str] | None = None) -> int:
                     trace_dir=args.trace_dir,
                     prices=args.prices,
                     trials=args.trials,
+                    deadline=args.deadline,
                 )
             )
         except MissingCredentials as error:
@@ -709,6 +716,7 @@ def main(argv: list[str] | None = None) -> int:
                     prices=args.prices,
                     trials=args.trials,
                     limit=args.limit,
+                    deadline=args.deadline,
                 )
             )
         except MissingCredentials as error:

@@ -182,3 +182,36 @@ async def test_a_run_that_hits_the_turn_cap_is_flagged():
 
     assert result.row["exit_reason"] == "max_turns"
     assert result.turns >= 3
+
+
+async def test_a_run_that_hits_the_deadline_is_flagged():
+    """A wall-clock deadline must stop a run whose turns each look cheap."""
+    task = TASKS["calc-divide-zero"]
+
+    class SlowLoopProvider:
+        def stream_response(self, *, model, system, messages, tools, signal=None, session_id=None):
+            message = AssistantMessage(
+                content=[ToolCall(id="c", name="bash", arguments={"command": "sleep 0.2"})],
+                stop_reason="toolUse",
+            )
+            stream = [AssistantDoneEvent(reason="toolUse", message=message)]
+
+            async def iterator():
+                for event in stream:
+                    yield event
+
+            return iterator()
+
+    result = await run_task(
+        task,
+        mode="agent",
+        provider=SlowLoopProvider(),
+        model="fake",
+        workdir=workdir(),
+        base=ROOT,
+        max_turns=50,
+        deadline=0.5,
+    )
+
+    assert result.row["exit_reason"] == "deadline"
+    assert result.wall_clock < 30

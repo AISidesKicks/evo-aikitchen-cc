@@ -58,6 +58,7 @@ async def run_cycle(
     trace_dir: str | Path | None = None,
     prices: PriceBook | None = None,
     trials: int = 1,
+    deadline: float | None = None,
 ) -> CycleResult:
     """Run the baseline and every candidate, then gate each candidate."""
     cycle_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -88,6 +89,7 @@ async def run_cycle(
                     max_turns=max_turns,
                     prices=prices,
                     trial=trial,
+                    deadline=deadline,
                 )
                 if trace_dir is not None:
                     write_trace(run, trace_dir)

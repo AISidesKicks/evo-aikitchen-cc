@@ -63,6 +63,8 @@ The pixi Python env has a preinstalled set of tools - suggest expanding it, if n
 - `python -m evo_bench prices --refresh` - refresh the dated model price book
 - `python -m evo_bench mine --repo PATH --limit 12` - turn a repository's history into tasks
 - `python -m evo_bench plan --tasks benchmarks/mined/tasks.jsonl` - what the corpus can resolve
+- `python -m evo_bench estimate --ledger runs/click24.jsonl` - cost a campaign first
+- `python -m evo_bench run --split holdout` - run only the holdout, to confirm
 - `pixi run secrets` - check that no .env secret appears in tracked files or history
 - `scripts/sandbox.sh REPO CMD...` - run a command with the repo read-only, a throwaway work dir and no network
 

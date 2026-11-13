@@ -97,6 +97,7 @@ async def run_task(
     variant_name: str = "baseline",
     prices: PriceBook | None = None,
     trial: int = 0,
+    deadline: float | None = None,
 ) -> RunResult:
     """Run one task and grade it."""
     if mode not in {"agent", "gold", "null"}:
@@ -120,6 +121,7 @@ async def run_task(
     cost = 0.0
     turns = 0
     tool_calls = 0
+    hit_deadline = False
     tokens_in = 0
     tokens_out = 0
     cache_read = 0
@@ -148,20 +150,31 @@ async def run_task(
             max_turns=effective_max_turns,
         )
         agent = AgentHarness(config)
-        async for event in agent.prompt(task.prompt):
-            if isinstance(event, TurnEndEvent):
-                turns += 1
-            elif isinstance(event, ToolExecutionStartEvent):
-                tool_calls += 1
-            elif isinstance(event, MessageEndEvent):
-                usage = getattr(event.message, "usage", None)
-                if usage is not None:
-                    cost += float(getattr(usage.cost, "total", 0.0) or 0.0)
-                    tokens_in += int(getattr(usage, "input", 0) or 0)
-                    tokens_out += int(getattr(usage, "output", 0) or 0)
-                    cache_read += int(getattr(usage, "cache_read", 0) or 0)
-                    cache_write += int(getattr(usage, "cache_write", 0) or 0)
-                trace.append(event.message.model_dump(mode="json"))
+        stream = agent.prompt(task.prompt)
+        try:
+            async for event in stream:
+                # A wall-clock deadline is the only thing that bounds a run whose
+                # turns each look cheap. The budget check between tasks is too
+                # late for a single run that will not stop.
+                if deadline is not None and time.monotonic() - started > deadline:
+                    agent.cancel()
+                    hit_deadline = True
+                    break
+                if isinstance(event, TurnEndEvent):
+                    turns += 1
+                elif isinstance(event, ToolExecutionStartEvent):
+                    tool_calls += 1
+                elif isinstance(event, MessageEndEvent):
+                    usage = getattr(event.message, "usage", None)
+                    if usage is not None:
+                        cost += float(getattr(usage.cost, "total", 0.0) or 0.0)
+                        tokens_in += int(getattr(usage, "input", 0) or 0)
+                        tokens_out += int(getattr(usage, "output", 0) or 0)
+                        cache_read += int(getattr(usage, "cache_read", 0) or 0)
+                        cache_write += int(getattr(usage, "cache_write", 0) or 0)
+                    trace.append(event.message.model_dump(mode="json"))
+        finally:
+            await stream.aclose()
 
     result = await grade(workspace, task.acceptance, timeout=timeout)
     elapsed = time.monotonic() - started
@@ -203,7 +216,13 @@ async def run_task(
         # failure hides the difference between "wrong" and "out of budget", and
         # that difference decides whether a comparison is measuring quality or
         # speed.
-        exit_reason="max_turns" if turns >= effective_max_turns else "graded",
+        exit_reason=(
+            "deadline"
+            if hit_deadline
+            else "max_turns"
+            if turns >= effective_max_turns
+            else "graded"
+        ),
         score=result.score,
         grader_version="acceptance-v1",
     )
