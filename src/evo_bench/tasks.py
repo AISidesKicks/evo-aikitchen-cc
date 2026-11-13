@@ -25,6 +25,8 @@ class Task:
     acceptance: str
     task_class: str = "unclassified"
     source: str = "unknown"
+    fixture: str | None = None
+    gold: str | None = None
     repo: str | None = None
     commit: str | None = None
     regression: str | None = None
@@ -49,6 +51,8 @@ def _from_mapping(row: dict[str, Any]) -> Task:
         "acceptance",
         "class",
         "source",
+        "fixture",
+        "gold",
         "repo",
         "commit",
         "regression",
@@ -65,6 +69,8 @@ def _from_mapping(row: dict[str, Any]) -> Task:
         acceptance=str(row["acceptance"]),
         task_class=str(row.get("class", "unclassified")),
         source=str(row.get("source", "unknown")),
+        fixture=row.get("fixture"),
+        gold=row.get("gold"),
         repo=row.get("repo"),
         commit=row.get("commit"),
         regression=row.get("regression"),
