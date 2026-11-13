@@ -634,3 +634,10 @@ Method background:
   https://www.infoq.com/articles/evo-agile-value-delivery/
 - Tom Gilb, *Competitive Engineering*, Elsevier, 2005.
 - [EVO in software development](evo-sw-devel.md) for the method itself.
+
+Next in the series:
+
+- [Building a custom AI harness with EVO principles](evo-in-ai-harness.md) turns the
+  mapping into a design guide.
+- [Simulating the EVO process for harness development](evo-simulation.md) shows how to
+  measure the harness without fooling yourself.
