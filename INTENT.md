@@ -25,6 +25,12 @@ Plain hyphens only, no em dashes or en dashes.
 - `mds/evo-in-ai-era.md` - EVO mapped onto AI harnesses: SWE-EVO benchmark results,
   METR time horizons, long-running agent research, agent distraction, harness
   engineering, token economics.
+- `mds/evo-in-ai-harness.md` - how to design a custom harness using the ten principles:
+  evidence, reference architecture, component defaults, contracts, budgets, routing,
+  staged build order.
+- `mds/evo-simulation.md` - how to simulate the EVO process when developing a harness:
+  scenario corpora, simulated stakeholders, measurement design, ablations, fault
+  injection, multi-session shifts, and testing EVO's own claims.
 - `README.md` - short overview linking both.
 - `docs/` - static GitHub Pages site, hand-written HTML only.
 
