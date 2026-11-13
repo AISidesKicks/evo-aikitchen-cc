@@ -3,8 +3,8 @@
 The task corpus lives here. One JSON object per line in `tasks.jsonl`, one task
 per line, no trailing commas.
 
-`tasks.example.jsonl` is a schema example, not a runnable corpus. Copy it to
-`tasks.jsonl` and replace the placeholders with real tasks from this repository.
+`tasks.example.jsonl` is a schema example, not a runnable corpus. `tasks.jsonl`
+is the real one, and it currently holds seven tasks against the `calc` fixture.
 
 ## Why a task corpus and not a public benchmark
 
@@ -48,6 +48,36 @@ looks like, your partial-credit scoring is a guess.
    keep a small permanent core that is never used for tuning.
 5. **Stratify.** Keep the class mix in proportion to the real backlog, not in
    proportion to how easy the task was to write.
+
+## Layout
+
+```
+benchmarks/
+  tasks.jsonl          the corpus, one task per line
+  tasks.example.jsonl  schema example
+  fixtures/calc/       the starting code for the calc tasks
+  gold/<task-id>/      the reference solution, copied over the workspace
+```
+
+A task names its starting code with `fixture` and its reference solution with
+`gold`. Both are paths relative to the repository root. A gold entry may be a
+directory of replacement files, which is easy to author, or a `.patch` file
+applied with `git apply`, which is what to use once tasks come from real
+commits.
+
+The `calc` fixture is a toy on purpose: it makes the controls cheap to run and
+the failure modes obvious. Real tasks should come from commits and incidents in
+this repository or the repositories you actually ship.
+
+## Commands
+
+```sh
+pixi run control                                  # gold must pass, null must fail
+python -m evo_bench run --provider fake --limit 3 # dry run, no credentials
+python -m evo_bench compare runs/a.jsonl runs/b.jsonl --labels before,after
+```
+
+Nothing is worth measuring until `pixi run control` is green.
 
 ## Sizing
 
