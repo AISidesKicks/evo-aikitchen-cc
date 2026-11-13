@@ -35,6 +35,10 @@ Plain hyphens only, no em dashes or en dashes.
   level RHI, branching search with routing, contract locked infra RSI, the three audits
   (RSI tax, statistical gates, task turnover), the frozen evaluator rule, the three clocks,
   overfitting curves, guardrails, build order.
+- `mds/evo-custom-ai-harness.md` - how to choose the harness itself: the thirteen layers
+  behind skills and hooks, Tau in depth, JAZ and its StuLife and AppWorld results, five more
+  Python harnesses, coverage matrices, where Tau loses, and the operator-shell plus
+  experiment-bench architecture.
 - `README.md` - short overview linking the deep dives.
 - `docs/` - static GitHub Pages site, hand-written HTML only.
 
