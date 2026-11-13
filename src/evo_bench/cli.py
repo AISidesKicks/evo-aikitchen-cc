@@ -69,11 +69,25 @@ def _cache_or_none(cache: Path | None, trials: int) -> Path | None:
     return cache
 
 
-def _load(root: Path, corpus: Path | None = None) -> list[Task]:
+def _load(
+    root: Path, corpus: Path | None = None, split: str | None = None
+) -> list[Task]:
+    """Load a corpus, optionally filtered to one split.
+
+    Campaigns should tune on ``train`` and confirm on ``holdout``. Running every
+    task every time spends a fifth of the budget re-measuring tasks that are
+    supposed to be untouched.
+    """
     path = corpus or _find_corpus(root)
     if path is None:
         raise SystemExit(f"no task corpus: add {DEFAULT_TASKS}")
-    return load_tasks(path if path.is_absolute() else root / path)
+    tasks = load_tasks(path if path.is_absolute() else root / path)
+    if split and split != "all":
+        selected = [task for task in tasks if task.split == split]
+        if not selected:
+            raise SystemExit(f"no tasks in split {split!r} in {path}")
+        return selected
+    return tasks
 
 
 def _workdir() -> Path:
@@ -384,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
     control = sub.add_parser("control", help="run the gold and null controls")
     control.add_argument("--timeout", type=float, default=120.0)
     control.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
+    control.add_argument("--split", default=None, choices=["train", "holdout", "all"])
 
     run = sub.add_parser("run", help="run the agent over the corpus")
     run.add_argument(
@@ -396,6 +411,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--timeout", type=float, default=300.0)
     run.add_argument("--limit", type=int, default=None)
     run.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
+    run.add_argument(
+        "--split", default=None, choices=["train", "holdout", "all"], help="filter by split"
+    )
     run.add_argument("--trials", type=int, default=1, help="repeated runs per task")
     run.add_argument(
         "--cache",
@@ -450,6 +468,9 @@ def main(argv: list[str] | None = None) -> int:
     cycle_cmd.add_argument("--timeout", type=float, default=300.0)
     cycle_cmd.add_argument("--cache", type=Path, default=None)
     cycle_cmd.add_argument("--tasks", type=Path, default=None, help="corpus file to use")
+    cycle_cmd.add_argument(
+        "--split", default=None, choices=["train", "holdout", "all"], help="filter by split"
+    )
     cycle_cmd.add_argument("--limit", type=int, default=None, help="use only the first N tasks")
     cycle_cmd.add_argument("--max-turns", type=int, default=None)
     cycle_cmd.add_argument("--trials", type=int, default=1)
@@ -500,7 +521,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         return status(root, args.tasks)
     if args.command == "control":
-        return asyncio.run(_controls(root, _load(root, args.tasks), args.timeout))
+        return asyncio.run(
+            _controls(root, _load(root, args.tasks, args.split), args.timeout)
+        )
     if args.command == "run":
         try:
             variant = None
@@ -512,7 +535,7 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(
                 _run(
                     root,
-                    _load(root, args.tasks),
+                    _load(root, args.tasks, args.split),
                     provider_name=args.provider,
                     model=args.model,
                     ledger=args.ledger,
@@ -597,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(
                 _cycle(
                     root,
-                    _load(root, args.tasks),
+                    _load(root, args.tasks, args.split),
                     variants_dir=args.variants_dir,
                     baseline_name=args.baseline,
                     candidate_names=names,
