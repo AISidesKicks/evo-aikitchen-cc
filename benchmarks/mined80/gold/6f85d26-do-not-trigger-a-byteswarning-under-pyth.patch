@@ -1,0 +1,14 @@
+diff --git a/src/click/types.py b/src/click/types.py
+index 1e9872e..a27983b 100644
+--- a/src/click/types.py
++++ b/src/click/types.py
+@@ -1104,7 +1104,8 @@ class Path(ParamType[str | bytes | os.PathLike[str]]):
+     ) -> str | bytes | os.PathLike[str]:
+         rv = value
+ 
+-        is_dash = self.file_okay and self.allow_dash and rv in (b"-", "-")
++        dash = b"-" if isinstance(rv, bytes) else "-"
++        is_dash = self.file_okay and self.allow_dash and rv == dash
+ 
+         if not is_dash:
+             if self.resolve_path:
