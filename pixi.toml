@@ -43,6 +43,15 @@ depends-on = ["init"]
 cmd = "python -m evo_bench control"
 description = "Run the gold and null controls over the corpus"
 
+[tasks.charts]
+depends-on = ["init"]
+cmd = "python scripts/charts.py"
+description = "Regenerate the SVG charts from the campaign ledgers"
+
+[tasks.assets]
+cmd = 'w=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 docs/EVO.jpeg); if [ "$w" -le 1600 ]; then echo "EVO.jpeg is already ${w}px wide"; exit 0; fi; ffmpeg -y -v error -i docs/EVO.jpeg -vf "scale=1600:-2:flags=lanczos" -q:v 4 docs/EVO.jpeg.tmp && mv docs/EVO.jpeg.tmp docs/EVO.jpeg; echo "compressed to 1600px"'
+description = "Compress the hero image down to 1600px wide"
+
 [tasks.secrets]
 depends-on = ["init"]
 cmd = "python -m evo_bench secrets"
