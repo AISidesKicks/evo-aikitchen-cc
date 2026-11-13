@@ -7,6 +7,7 @@ tree and two runs can never see each other's changes.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -54,11 +55,18 @@ def apply_patch(workspace: Workspace, patch: str | Path) -> None:
     if not patch_path.is_file():
         raise FileNotFoundError(f"no patch at {patch_path}")
 
+    # A workspace inside another repository would make git discover that outer
+    # repository and resolve patch paths against the wrong root. Ceiling the
+    # search at the workspace parent keeps ``git apply`` local.
+    env = dict(os.environ)
+    env["GIT_CEILING_DIRECTORIES"] = str(workspace.root.parent)
+
     result = subprocess.run(
         ["git", "apply", "--whitespace=nowarn", str(patch_path)],
         cwd=workspace.root,
         capture_output=True,
         text=True,
+        env=env,
     )
     if result.returncode != 0:
         raise RuntimeError(f"git apply failed: {result.stderr.strip()}")

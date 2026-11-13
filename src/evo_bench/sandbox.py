@@ -10,7 +10,8 @@ Inside the sandbox a tool can see:
 - the runtime directories it needs to start, read-only
 - the locked pixi environment, read-only, so the same interpreter and packages
   are used as on the host
-- the workspace, read-write, because the agent has to edit files
+- the workspace, read-write, because the agent has to edit files and the
+  acceptance check has to be able to write caches and build artefacts
 - an empty throwaway ``/tmp`` as ``HOME``
 
 It cannot see ``$HOME``, the network, or any inherited environment variable.
@@ -44,6 +45,7 @@ class Sandbox:
     python_prefix: Path = field(default_factory=lambda: Path(sys.prefix))
     masked_names: tuple[str, ...] = MASKED_NAMES
     extra_env: dict[str, str] = field(default_factory=dict)
+    writable: bool = True
 
     def __post_init__(self) -> None:
         if shutil.which("bwrap") is None:
@@ -77,7 +79,8 @@ class Sandbox:
         prefix = self.python_prefix.resolve()
         args += ["--ro-bind", str(prefix), str(prefix)]
 
-        args += ["--ro-bind", str(workspace), "/work"]
+        bind = "--bind" if self.writable else "--ro-bind"
+        args += [bind, str(workspace), "/work"]
 
         for name in self.masked_names:
             if (workspace / name).exists():
